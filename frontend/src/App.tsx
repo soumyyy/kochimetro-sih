@@ -6,8 +6,6 @@ import IBLGantt from './pages/IBLGantt'
 import DepotView from './pages/DepotView'
 import SponsorDash from './pages/SponsorDash'
 import { Toaster } from './components/ui/sonner'
-import './App.css'
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -21,7 +19,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="min-h-screen bg-gray-50">
+        <div className="app-shell min-h-screen">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/planboard" element={<PlanBoard />} />

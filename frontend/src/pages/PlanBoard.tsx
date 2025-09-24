@@ -70,7 +70,7 @@ export default function PlanBoard() {
     const StatusIcon = statusConfig[train.status].icon
 
     return (
-      <Card className="cursor-pointer hover:shadow-md transition-shadow">
+      <Card className="glass-panel border-none cursor-pointer transition-shadow hover:shadow-lg">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
@@ -150,26 +150,26 @@ export default function PlanBoard() {
         </div>
 
         {/* KPI Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <Card className="glass-panel border-none">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-green-600">{activeTrains.length}</div>
               <div className="text-sm text-gray-600">Active (7-9 required)</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="glass-panel border-none">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-blue-600">{standbyTrains.length}</div>
-              <div className="text-sm text-gray-600">Standby Reserve</div>
+              <div className="text-sm text-gray-600">Standby reserve</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="glass-panel border-none">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-orange-600">{iblTrains.length}</div>
               <div className="text-sm text-gray-600">In IBL</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="glass-panel border-none">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-gray-600">
                 {trains.filter(t => t.fitness_ok).length}/{trains.length}

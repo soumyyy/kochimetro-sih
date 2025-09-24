@@ -9,8 +9,6 @@ from datetime import date
 
 from app.database import get_db
 from app.services import PlanningService
-from app.models import User
-
 router = APIRouter()
 
 
@@ -52,21 +50,19 @@ async def create_plan(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new induction plan"""
-    # For now, use a default user ID - in real app, get from auth
-    test_user_id = "testuser"
-
     planning_service = PlanningService(db)
     try:
         plan_id = await planning_service.create_plan(
             plan_date=plan_data.plan_date,
-            weights=plan_data.weights
+            weights=plan_data.weights,
+            notes=plan_data.notes,
         )
         return {"plan_id": plan_id, "message": "Plan created successfully"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{plan_id}/run", summary="Execute optimization")
+@router.post("/plans/{plan_id}/run", summary="Execute optimization")
 async def run_plan(
     plan_id: str,
     weight_overrides: Optional[Dict[str, float]] = None,
@@ -86,7 +82,7 @@ async def run_plan(
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
-@router.patch("/{plan_id}/items/{train_id}", summary="Manual override")
+@router.patch("/plans/{plan_id}/items/{train_id}", summary="Manual override")
 async def override_plan_item(
     plan_id: str,
     train_id: str,
@@ -141,12 +137,9 @@ async def finalize_plan(
     db: AsyncSession = Depends(get_db)
 ):
     """Finalize and lock the plan"""
-    # For now, use a default user ID - in real app, get from auth
-    test_user_id = "testuser"
-
     planning_service = PlanningService(db)
     try:
-        success = await planning_service.finalize_plan(plan_id, test_user_id)
+        success = await planning_service.finalize_plan(plan_id)
         return {"message": "Plan finalized successfully", "success": success}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -188,7 +181,7 @@ async def get_train_features(
     return features
 
 
-@router.post("/{plan_id}/whatif", summary="What-if analysis")
+@router.post("/plans/{plan_id}/whatif", summary="What-if analysis")
 async def whatif_analysis(
     plan_id: str,
     whatif_data: WhatIfRequest,

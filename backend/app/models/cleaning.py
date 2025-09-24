@@ -1,9 +1,11 @@
 """
-Cleaning slots models and schemas
+Cleaning slots models aligned with Supabase schema
 """
-from typing import Optional, TYPE_CHECKING
+import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, Numeric, ForeignKey, TIMESTAMP
+from typing import Optional, TYPE_CHECKING
+from sqlalchemy import Integer, Text, ForeignKey, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, BaseSchema, BaseCreateSchema, BaseUpdateSchema
@@ -13,20 +15,19 @@ if TYPE_CHECKING:
 
 
 class CleaningSlot(Base):
-    """Cleaning slot model"""
+    """Cleaning slot schedule"""
     __tablename__ = "cleaning_slots"
 
-    slot_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
-    bay_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("stabling_bays.bay_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+    slot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    start_ts: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    end_ts: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    bay_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("stabling_bays.bay_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    start_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     manpower: Mapped[int] = mapped_column(Integer, nullable=False)
-    clean_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    clean_type: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relationships
     bay: Mapped["StablingBay"] = relationship()
@@ -35,19 +36,17 @@ class CleaningSlot(Base):
 # Pydantic schemas
 class CleaningSlotSchema(BaseSchema):
     """Cleaning slot response schema"""
-    slot_id: str
-    bay_id: str
+    slot_id: uuid.UUID
+    bay_id: uuid.UUID
     start_ts: datetime
     end_ts: datetime
     manpower: int
     clean_type: str
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
 
 
 class CleaningSlotCreateSchema(BaseCreateSchema):
     """Cleaning slot creation schema"""
-    bay_id: str
+    bay_id: uuid.UUID
     start_ts: datetime
     end_ts: datetime
     manpower: int

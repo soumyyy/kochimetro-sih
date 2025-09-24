@@ -2,18 +2,16 @@
 Optimization Service
 Implements the 3-stage mathematical optimization for train assignment
 """
-from datetime import datetime, date, time, timedelta
+import uuid
+from datetime import datetime, date, time, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from ortools.sat.python import cp_model
-from ..models import (
-    Train, InductionPlan, InductionPlanItem,
-    StablingBay, Depot, BayOccupancy
-)
+from ..models import Train, InductionPlan, InductionPlanItem, StablingBay, BayOccupancy
 from ..config import settings
 from .feature_extraction import FeatureExtractionService, TrainFeatures
 
@@ -31,18 +29,6 @@ class OptimizationResult:
     objective_value: float
 
 
-@dataclass
-class IBLSchedule:
-    """IBL job schedule"""
-    train_id: str
-    bay_id: str
-    start_time: datetime
-    end_time: datetime
-    job_type: str
-    assigned_crew: str
-    priority: str
-
-
 class OptimizationService:
     """3-stage optimization service for train fleet management"""
 
@@ -55,30 +41,37 @@ class OptimizationService:
         self.night_end = time(5, 30)   # 05:30
 
         # Optimization weights (from config)
-        self.weights = {
-            'risk': settings.W_RISK,
-            'brand': settings.W_BRAND,
-            'mileage': settings.W_MILEAGE,
-            'clean': settings.W_CLEAN,
-            'shunt': settings.W_SHUNT,
-            'override': settings.W_OVERRIDE
+        self.default_weights = {
+            "risk": settings.W_RISK,
+            "brand": settings.W_BRAND,
+            "mileage": settings.W_MILEAGE,
+            "clean": settings.W_CLEAN,
+            "shunt": settings.W_SHUNT,
+            "override": settings.W_OVERRIDE,
         }
+        self.weights = self.default_weights.copy()
 
-    async def run_optimization(self, plan_date: date, weights: Optional[Dict] = None) -> OptimizationResult:
+    async def run_optimization(
+        self,
+        plan: InductionPlan,
+        weights: Optional[Dict] = None,
+    ) -> OptimizationResult:
         """
         Run the complete 3-stage optimization
 
         Args:
-            plan_date: Date for optimization
+            plan: Plan to optimize
             weights: Optional weight overrides
 
         Returns:
             OptimizationResult with all decisions
         """
+        self.weights = self.default_weights.copy()
         if weights:
             self.weights.update(weights)
 
         start_time = datetime.now()
+        plan_date = plan.plan_date
 
         # Stage 1: Assignment (Active/Standby/IBL)
         print(f"Running Stage 1: Train Assignment for {plan_date}")
@@ -94,12 +87,9 @@ class OptimizationService:
 
         execution_time = (datetime.now() - start_time).total_seconds()
 
-        # Create plan record
-        plan_id = f"plan_{plan_date.strftime('%Y%m%d')}"
-
         # Compile results
         result = OptimizationResult(
-            plan_id=plan_id,
+            plan_id=str(plan.plan_id),
             summary=self._create_summary(assignment_result, ibl_schedule, stabling_result),
             items=assignment_result['decisions'],
             ibl_gantt=ibl_schedule,
@@ -110,7 +100,7 @@ class OptimizationService:
         )
 
         # Save to database
-        await self._save_plan_to_database(result, plan_date)
+        await self._save_plan_to_database(plan, result, plan_date)
 
         return result
 
@@ -378,7 +368,7 @@ class OptimizationService:
 
         # Simple scheduling: assign each IBL train to first available bay
         ibl_gantt = []
-        current_time = datetime.combine(plan_date, self.night_start)
+        current_time = datetime.combine(plan_date, self.night_start, tzinfo=timezone.utc)
 
         for i, train_decision in enumerate(ibl_trains):
             train_id = train_decision['train_id']
@@ -453,39 +443,59 @@ class OptimizationService:
             'optimization_success': assignment_result.get('objective_value', 0) > 0
         }
 
-    async def _save_plan_to_database(self, result: OptimizationResult, plan_date: date):
-        """Save optimization results to database"""
-        # Create plan record
-        plan = InductionPlan(
-            plan_id=result.plan_id,
-            plan_date=plan_date,
-            status="completed",
-            weights_json=self.weights,
-            day_type="weekday" if plan_date.weekday() < 5 else "weekend"
-        )
-        self.db.add(plan)
+    async def _save_plan_to_database(
+        self,
+        plan: InductionPlan,
+        result: OptimizationResult,
+        plan_date: date,
+    ) -> None:
+        """Persist optimization results on the existing plan"""
 
-        # Save plan items
+        plan.weights_json = self.weights
+        plan.status = "completed"
+
+        # Clear previous plan items
+        await self.db.execute(
+            delete(InductionPlanItem).where(InductionPlanItem.plan_id == plan.plan_id)
+        )
+
+        # Clear bay occupancy for the plan date window
+        day_start = datetime.combine(plan_date, datetime.min.time(), tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        await self.db.execute(
+            delete(BayOccupancy)
+            .where(BayOccupancy.from_ts >= day_start)
+            .where(BayOccupancy.from_ts < day_end)
+        )
+
         for item in result.items:
+            bay_id = None
+            if item.get("bay_id"):
+                try:
+                    bay_id = uuid.UUID(str(item["bay_id"]))
+                except ValueError:
+                    bay_id = None
+
             plan_item = InductionPlanItem(
-                plan_id=result.plan_id,
-                train_id=item['train_id'],
-                decision=item['decision'],
-                bay_id=item['bay_id'],
-                turnout_rank=item['turnout_rank'],
-                km_target=item['km_target'],
-                explain_json=item['explain']
+                plan_id=plan.plan_id,
+                train_id=item["train_id"],
+                decision=item["decision"],
+                bay_id=bay_id,
+                turnout_rank=item.get("turnout_rank"),
+                km_target=item.get("km_target"),
+                explain_json=item.get("explain", {}),
             )
             self.db.add(plan_item)
 
-        # Save IBL schedule to bay_occupancy
         for ibl_job in result.ibl_gantt:
+            from_ts = datetime.fromisoformat(ibl_job["from_ts"])
+            to_ts = datetime.fromisoformat(ibl_job["to_ts"])
+
             occupancy = BayOccupancy(
-                bay_id=ibl_job['bay_id'],
-                train_id=ibl_job['train_id'],
-                from_ts=datetime.fromisoformat(ibl_job['from_ts']),
-                to_ts=datetime.fromisoformat(ibl_job['to_ts']),
-                job_type=ibl_job['job_type']
+                bay_id=uuid.UUID(str(ibl_job["bay_id"])),
+                train_id=ibl_job["train_id"],
+                from_ts=from_ts,
+                to_ts=to_ts,
             )
             self.db.add(occupancy)
 

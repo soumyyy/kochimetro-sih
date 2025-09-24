@@ -5,13 +5,17 @@ Provides utilities for managing fleet data and calculations
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func
 from collections import defaultdict
 
 from ..models import (
-    Train, MileageLog, ServiceLog, BrandingExposureLog,
-    FitnessCertificate, JobCard, StablingBay, Depot
+    Train,
+    StablingBay,
+    FitnessCertificate,
+    BrandingExposureLog,
+    JobCard,
 )
+from ..models.mileage import MileageLog
 from .feature_extraction import FeatureExtractionService
 
 
@@ -31,9 +35,6 @@ class FleetService:
         # Get mileage statistics
         mileage_stats = await self.get_fleet_mileage_stats()
 
-        # Get service statistics
-        service_stats = await self.get_service_compliance_stats()
-
         # Get fitness compliance
         fitness_stats = await self.get_fitness_compliance_stats()
 
@@ -46,7 +47,6 @@ class FleetService:
             'standby_trains': len([t for t in trains if t.status == 'standby']),
             'ibl_trains': len([t for t in trains if t.status == 'ibl']),
             'mileage': mileage_stats,
-            'service': service_stats,
             'fitness': fitness_stats,
             'availability': availability_stats
         }
@@ -84,34 +84,11 @@ class FleetService:
         }
 
     async def get_service_compliance_stats(self, days: int = 30) -> Dict[str, Any]:
-        """Get service compliance statistics for the last N days"""
-        end_date = date.today()
-        start_date = end_date - timedelta(days=days)
-
-        # Get service logs
-        result = await self.db.execute(
-            select(
-                ServiceLog.date,
-                func.count(ServiceLog.log_id).label('total_logs'),
-                func.sum(func.cast(ServiceLog.actual_service, Integer)).label('actual_services')
-            )
-            .where(ServiceLog.date >= start_date)
-            .where(ServiceLog.date <= end_date)
-            .group_by(ServiceLog.date)
-        )
-        service_data = result.all()
-
-        if not service_data:
-            return {'compliance_rate': 0, 'total_planned': 0, 'total_actual': 0}
-
-        total_planned = sum(row.total_logs for row in service_data)
-        total_actual = sum(row.actual_services or 0 for row in service_data)
-        compliance_rate = (total_actual / total_planned * 100) if total_planned > 0 else 0
-
+        """Service compliance placeholder (service logs not modelled)"""
         return {
-            'compliance_rate': round(compliance_rate, 1),
-            'total_planned': total_planned,
-            'total_actual': total_actual,
+            'compliance_rate': 0,
+            'total_planned': 0,
+            'total_actual': 0,
             'days_analyzed': days
         }
 
@@ -174,16 +151,15 @@ class FleetService:
 
     async def get_trains_by_depot(self) -> Dict[str, List[Train]]:
         """Get trains grouped by depot"""
-        result = await self.db.execute(
-            select(Train, Depot)
-            .outerjoin(Depot, Train.current_bay == Depot.depot_id)  # This might need adjustment
-        )
-        # For now, assume all trains are at MUTTOM depot
+        result = await self.db.execute(select(Train))
         trains = result.scalars().all()
 
         depot_groups = defaultdict(list)
         for train in trains:
-            depot_groups[train.depot_id or 'MUTTOM'].append(train)
+            depot_code = "unknown"
+            if train.bay and train.bay.depot:
+                depot_code = train.bay.depot.code or "unknown"
+            depot_groups[depot_code].append(train)
 
         return dict(depot_groups)
 
@@ -195,8 +171,10 @@ class FleetService:
         total_bays = len(bays)
         active_bays = len([b for b in bays if b.is_active])
 
-        # Count bays with current occupancy
-        occupied_bays = len([b for b in bays if b.bay_id in [t.current_bay for t in await self.db.execute(select(Train.current_bay))]])
+        train_result = await self.db.execute(select(Train))
+        trains = train_result.scalars().all()
+        occupied_bay_ids = {train.current_bay for train in trains if train.current_bay}
+        occupied_bays = len([b for b in bays if b.bay_id in occupied_bay_ids])
 
         return {
             'total_bays': total_bays,
@@ -206,37 +184,13 @@ class FleetService:
         }
 
     async def get_daily_service_summary(self, target_date: date) -> Dict[str, Any]:
-        """Get service summary for a specific date"""
-        result = await self.db.execute(
-            select(
-                func.count().label('total_planned'),
-                func.sum(func.cast(ServiceLog.actual_service, Integer)).label('total_actual'),
-                func.avg(func.cast(ServiceLog.delay_minutes, Float)).label('avg_delay')
-            )
-            .where(ServiceLog.date == target_date)
-        )
-        row = result.first()
-
-        if not row:
-            return {
-                'date': target_date.isoformat(),
-                'total_planned': 0,
-                'total_actual': 0,
-                'compliance_rate': 0,
-                'avg_delay': 0
-            }
-
-        total_planned = row.total_planned or 0
-        total_actual = row.total_actual or 0
-        compliance_rate = (total_actual / total_planned * 100) if total_planned > 0 else 0
-        avg_delay = row.avg_delay or 0
-
+        """Placeholder service summary pending service log integration"""
         return {
             'date': target_date.isoformat(),
-            'total_planned': total_planned,
-            'total_actual': total_actual,
-            'compliance_rate': round(compliance_rate, 1),
-            'avg_delay': round(avg_delay, 1)
+            'total_planned': 0,
+            'total_actual': 0,
+            'compliance_rate': 0,
+            'avg_delay': 0
         }
 
     async def get_branding_performance(self, days: int = 30) -> Dict[str, Any]:

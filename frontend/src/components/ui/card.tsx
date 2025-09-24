@@ -23,7 +23,7 @@ interface CardContentProps {
 
 export function Card({ className, children }: CardProps) {
   return (
-    <div className={clsx('rounded-lg border bg-card text-card-foreground shadow-sm', className)}>
+    <div className={clsx('rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm', className)}>
       {children}
     </div>
   )

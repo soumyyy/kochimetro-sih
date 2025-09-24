@@ -1,9 +1,11 @@
 """
-Maintenance and compliance models and schemas
+Maintenance and compliance models aligned with Supabase schema
 """
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
-from datetime import date, datetime
-from sqlalchemy import String, Integer, Text, Date, JSON, ForeignKey, Boolean, TIMESTAMP
+import uuid
+from datetime import datetime, date
+from typing import Optional, TYPE_CHECKING
+from sqlalchemy import Text, Boolean, Integer, Date, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, BaseSchema, BaseCreateSchema, BaseUpdateSchema
@@ -12,58 +14,36 @@ if TYPE_CHECKING:
     from .train import Train
 
 
-class Department(Base):
-    """Department model for fitness certificates"""
-    __tablename__ = "departments"
-
-    dept_code: Mapped[str] = mapped_column(String(10), primary_key=True, index=True)
-    dept_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_safety_critical: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    # Relationships
-    certificates: Mapped[List["FitnessCertificate"]] = relationship(back_populates="department")
-
-
 class FitnessCertificate(Base):
-    """Fitness certificate model"""
+    """Fitness certificate records"""
     __tablename__ = "fitness_certificates"
 
-    cert_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
+    cert_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     train_id: Mapped[str] = mapped_column(
-        String(10),
-        ForeignKey("trains.train_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        Text, ForeignKey("trains.train_id", ondelete="CASCADE"), nullable=False, index=True
     )
-    dept: Mapped[str] = mapped_column(
-        String(10),
-        ForeignKey("departments.dept_code", ondelete="CASCADE"),
-        nullable=False
-    )
-    valid_from: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    valid_to: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False)
-    source_ref: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    dept: Mapped[str] = mapped_column(Text, nullable=False)
+    valid_from: Mapped[datetime] = mapped_column(nullable=False)
+    valid_to: Mapped[datetime] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    source_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     train: Mapped["Train"] = relationship(back_populates="fitness_certificates")
-    department: Mapped["Department"] = relationship(back_populates="certificates")
 
 
 class JobCard(Base):
-    """Job card model for maintenance work orders"""
+    """Maintenance job cards"""
     __tablename__ = "job_cards"
 
-    job_id: Mapped[str] = mapped_column(String(50), primary_key=True, index=True)
+    job_id: Mapped[str] = mapped_column(Text, primary_key=True)
     train_id: Mapped[str] = mapped_column(
-        String(10),
-        ForeignKey("trains.train_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        Text, ForeignKey("trains.train_id", ondelete="CASCADE"), nullable=False, index=True
     )
-    source: Mapped[str] = mapped_column(String(20), nullable=False, default="Maximo")
-    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False, default="Maximo")
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     priority: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     ibl_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -75,47 +55,25 @@ class JobCard(Base):
 
 
 # Pydantic schemas
-class DepartmentSchema(BaseSchema):
-    """Department response schema"""
-    dept_code: str
-    dept_name: str
-    description: Optional[str]
-    is_safety_critical: bool
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
-
-
 class FitnessCertificateSchema(BaseSchema):
     """Fitness certificate response schema"""
-    cert_id: str
+    cert_id: uuid.UUID
     train_id: str
-    dept_code: str
-    certificate_number: str
-    valid_from: date
-    valid_to: date
-    issued_by: Optional[str]
+    dept: str
+    valid_from: datetime
+    valid_to: datetime
     status: str
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    source_ref: Optional[str]
 
 
 class JobCardSchema(BaseSchema):
     """Job card response schema"""
     job_id: str
-    source_system: str
     train_id: str
-    job_type: str
-    description: str
+    source: str
     status: str
-    priority: str
-    safety_critical: bool
-    estimated_duration_hours: Optional[float]
-    due_date: Optional[datetime]
-    planned_start: Optional[datetime]
-    actual_start: Optional[datetime]
-    completed_at: Optional[datetime]
-    assigned_crew: Optional[str]
-    work_center: Optional[str]
-    material_requirements: Optional[Dict[str, Any]]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    priority: Optional[int]
+    due_date: Optional[date]
+    ibl_required: bool
+    title: Optional[str]
+    details: Optional[str]

@@ -4,15 +4,14 @@ Handles CSV file ingestion for MVP
 """
 import csv
 import io
+import uuid
 from typing import Dict, Any, List
 from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert
+from sqlalchemy import select
 
-from ..models import (
-    Train, FitnessCertificate, JobCard, BrandingCampaign,
-    BrandingExposureLog, MileageLog, StablingBay, Depot
-)
+from ..models import Train, FitnessCertificate, JobCard, BrandingExposureLog
+from ..models.mileage import MileageLog
 
 
 class DataIngestionService:
@@ -38,13 +37,20 @@ class DataIngestionService:
             )
             train = existing.scalar_one_or_none()
 
+            current_bay = row.get('current_bay') or None
+            if current_bay:
+                try:
+                    current_bay = uuid.UUID(current_bay)
+                except ValueError:
+                    current_bay = None
+
             train_data = {
                 'train_id': train_id,
                 'car_count': int(row.get('car_count', 4)),
                 'brand_code': row.get('brand_code'),
                 'wrap_id': row.get('wrap_id'),
                 'status': row.get('status', 'standby'),
-                'current_bay': row.get('current_bay'),
+                'current_bay': current_bay,
                 'notes': row.get('notes')
             }
 
