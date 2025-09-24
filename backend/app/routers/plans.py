@@ -8,6 +8,8 @@ from typing import Dict, Any, Optional
 from datetime import date
 
 from app.database import get_db
+from app.services import PlanningService
+from app.models import User
 
 router = APIRouter()
 
@@ -50,24 +52,38 @@ async def create_plan(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new induction plan"""
-    # TODO: Implement plan creation
-    return {"plan_id": "plan-123", "message": "Plan created"}
+    # For now, use a default user ID - in real app, get from auth
+    test_user_id = "testuser"
+
+    planning_service = PlanningService(db)
+    try:
+        plan_id = await planning_service.create_plan(
+            plan_date=plan_data.plan_date,
+            weights=plan_data.weights
+        )
+        return {"plan_id": plan_id, "message": "Plan created successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{plan_id}/run", summary="Execute optimization")
 async def run_plan(
     plan_id: str,
+    weight_overrides: Optional[Dict[str, float]] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Execute the 3-stage optimization for a plan"""
-    # TODO: Implement optimization execution
-    return {
-        "plan_id": plan_id,
-        "summary": {"active": 8, "standby": 6, "ibl": 11},
-        "items": [],
-        "ibl_gantt": [],
-        "turnout": []
-    }
+    planning_service = PlanningService(db)
+    try:
+        result = await planning_service.run_plan_optimization(
+            plan_id=plan_id,
+            weights=weight_overrides
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
 @router.patch("/{plan_id}/items/{train_id}", summary="Manual override")
@@ -101,6 +117,85 @@ async def get_explanation(
     """Get decision explanation for a specific train"""
     # TODO: Implement explanation logic
     return {"reasons": [], "scores": {}}
+
+
+@router.get("/{plan_id}", summary="Get plan details")
+async def get_plan(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get detailed plan information"""
+    planning_service = PlanningService(db)
+    plan_data = await planning_service.get_plan(plan_id)
+    if not plan_data:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return plan_data
+
+
+@router.get("/{plan_id}/summary", summary="Get plan summary")
+async def get_plan_summary(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get summary statistics for a plan"""
+    planning_service = PlanningService(db)
+    summary = await planning_service.get_plan_summary(plan_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return summary
+
+
+@router.post("/{plan_id}/finalize", summary="Finalize plan")
+async def finalize_plan(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Finalize and lock the plan"""
+    # For now, use a default user ID - in real app, get from auth
+    test_user_id = "testuser"
+
+    planning_service = PlanningService(db)
+    try:
+        success = await planning_service.finalize_plan(plan_id, test_user_id)
+        return {"message": "Plan finalized successfully", "success": success}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/", summary="List plans")
+async def list_plans(
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get list of plans with pagination"""
+    planning_service = PlanningService(db)
+    plans = await planning_service.get_plans_list(limit, offset)
+    return {"plans": plans}
+
+
+@router.get("/fleet/status", summary="Get fleet status")
+async def get_fleet_status(
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current fleet status overview"""
+    planning_service = PlanningService(db)
+    status = await planning_service.get_fleet_status()
+    return status
+
+
+@router.get("/features/{train_id}", summary="Get train features")
+async def get_train_features(
+    train_id: str,
+    plan_date: date,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get detailed features for a specific train"""
+    planning_service = PlanningService(db)
+    features = await planning_service.get_train_features(train_id, plan_date)
+    if not features:
+        raise HTTPException(status_code=404, detail="Train not found")
+    return features
 
 
 @router.post("/{plan_id}/whatif", summary="What-if analysis")

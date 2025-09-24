@@ -187,7 +187,7 @@ const getPriorityColor = (priority: string) => {
 }
 
 export default function IBLGantt() {
-  const [jobs, setJobs] = useState<IBLJOb[]>(mockJobs)
+  const [jobs] = useState<IBLJob[]>(mockJobs)
 
   return (
     <Layout>
@@ -272,7 +272,7 @@ export default function IBLGantt() {
                   <div className="w-32 flex-shrink-0 p-2 font-semibold text-sm text-gray-900">
                     Bay / Train
                   </div>
-                  {timeSlots.map((time, index) => (
+                  {timeSlots.map((time) => (
                     <div
                       key={time}
                       className="w-16 flex-shrink-0 p-2 text-center text-xs font-medium text-gray-500 border-l"

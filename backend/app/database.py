@@ -6,14 +6,27 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-# Create async engine
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,  # Set to True for SQL debugging
-    future=True,
-    pool_size=10,
-    max_overflow=20,
-)
+# Create async engine with environment-specific settings
+def create_engine():
+    """Create database engine with appropriate settings for environment"""
+    engine_config = {
+        "echo": settings.is_development(),  # SQL debugging in dev only
+        "future": True,
+        "pool_size": 20 if settings.is_production() else 10,
+        "max_overflow": 30 if settings.is_production() else 20,
+    }
+
+    if settings.is_production():
+        # Production optimizations
+        engine_config.update({
+            "pool_pre_ping": True,  # Validate connections
+            "pool_recycle": 3600,   # Recycle connections every hour
+        })
+
+    return create_async_engine(settings.DATABASE_URL, **engine_config)
+
+# Create engine instance
+engine = create_engine()
 
 # Create async session factory
 async_session = async_sessionmaker(

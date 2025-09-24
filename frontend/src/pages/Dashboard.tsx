@@ -8,8 +8,7 @@ import {
   Clock,
   TrendingUp,
   Users,
-  Calendar,
-  MapPin
+  Calendar
 } from 'lucide-react'
 
 const stats = [

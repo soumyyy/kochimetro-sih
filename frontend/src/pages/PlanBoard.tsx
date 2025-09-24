@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Layout from '../components/Layout'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Card, CardContent} from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import {
   Activity,
@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Pause,
   Play,
   Settings
 } from 'lucide-react'
@@ -61,7 +60,7 @@ const statusConfig = {
 }
 
 export default function PlanBoard() {
-  const [trains, setTrains] = useState<Train[]>(mockTrains)
+  const [trains] = useState<Train[]>(mockTrains)
 
   const activeTrains = trains.filter(t => t.status === 'active')
   const standbyTrains = trains.filter(t => t.status === 'standby')

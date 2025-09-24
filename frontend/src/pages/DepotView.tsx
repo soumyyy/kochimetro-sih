@@ -71,7 +71,7 @@ const getThroatSideColor = (side: string) => {
 }
 
 export default function DepotView() {
-  const [bays, setBays] = useState<Bay[]>(mockBays)
+  const [bays] = useState<Bay[]>(mockBays)
   const [routes] = useState<Route[]>(mockRoutes)
 
   const occupiedBays = bays.filter(b => b.status === 'occupied')
@@ -203,7 +203,7 @@ export default function DepotView() {
                 {occupiedBays
                   .filter(bay => bay.next_turnout_rank)
                   .sort((a, b) => (a.next_turnout_rank || 0) - (b.next_turnout_rank || 0))
-                  .map((bay, index) => (
+                  .map((bay) => (
                   <div key={bay.id} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-shrink-0 w-8 h-8 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center font-medium text-sm">
                       {bay.next_turnout_rank}

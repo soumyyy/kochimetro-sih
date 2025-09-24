@@ -6,9 +6,7 @@ import {
   BarChart3,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
-  CheckCircle,
-  DollarSign
+  AlertTriangle
 } from 'lucide-react'
 
 interface Sponsor {
