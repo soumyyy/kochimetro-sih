@@ -4,6 +4,7 @@ Induction plan models and schemas
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 from datetime import date, datetime
 from sqlalchemy import String, Date, Text, JSON, TIMESTAMP, ForeignKey, Integer, Numeric
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, BaseSchema, BaseCreateSchema, BaseUpdateSchema
@@ -11,20 +12,31 @@ from .base import Base, BaseSchema, BaseCreateSchema, BaseUpdateSchema
 if TYPE_CHECKING:
     from .train import Train
     from .depot import DepotRoute
+    from .user import User
+    from .system import Alert, Override
 
 
 class InductionPlan(Base):
     """Induction plan model"""
     __tablename__ = "induction_plans"
 
-    plan_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
+    plan_id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True)
     plan_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True, index=True)
-    created_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     weights_json: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Override Base timestamps since they don't exist in existing DB schema
+    created_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
     # Relationships
+    creator: Mapped[Optional["User"]] = relationship(back_populates="created_plans")
     plan_items: Mapped[List["InductionPlanItem"]] = relationship(back_populates="plan")
     turnout_plans: Mapped[List["TurnoutPlan"]] = relationship(back_populates="plan")
     alerts: Mapped[List["Alert"]] = relationship(back_populates="plan")
@@ -59,11 +71,6 @@ class InductionPlanItem(Base):
     plan: Mapped["InductionPlan"] = relationship(back_populates="plan_items")
     train: Mapped["Train"] = relationship(back_populates="plan_items")
 
-    # Relationships
-    plan: Mapped["InductionPlan"] = relationship(back_populates="turnout_plans")
-    train: Mapped["Train"] = relationship(back_populates="turnout_plans")
-    route: Mapped["DepotRoute"] = relationship()
-
 
 class TurnoutPlan(Base):
     """Morning turnout sequencing"""
@@ -95,6 +102,7 @@ class TurnoutPlan(Base):
     # Relationships
     plan: Mapped["InductionPlan"] = relationship(back_populates="turnout_plans")
     train: Mapped["Train"] = relationship(back_populates="turnout_plans")
+    route: Mapped["DepotRoute"] = relationship()
 
 
 # Pydantic schemas

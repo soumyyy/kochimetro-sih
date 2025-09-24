@@ -98,17 +98,7 @@ async def override_plan_item(
     return {"message": "Override applied"}
 
 
-@router.post("/{plan_id}/finalize", summary="Finalize plan")
-async def finalize_plan(
-    plan_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """Finalize and lock the plan"""
-    # TODO: Implement finalization
-    return {"message": "Plan finalized"}
-
-
-@router.get("/{plan_id}/explain/{train_id}", summary="Get explanation")
+@router.get("/plans/{plan_id}/explain/{train_id}", summary="Get explanation")
 async def get_explanation(
     plan_id: str,
     train_id: str,
@@ -119,7 +109,7 @@ async def get_explanation(
     return {"reasons": [], "scores": {}}
 
 
-@router.get("/{plan_id}", summary="Get plan details")
+@router.get("/plans/{plan_id}", summary="Get plan details")
 async def get_plan(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -132,7 +122,7 @@ async def get_plan(
     return plan_data
 
 
-@router.get("/{plan_id}/summary", summary="Get plan summary")
+@router.get("/plans/{plan_id}/summary", summary="Get plan summary")
 async def get_plan_summary(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -145,7 +135,7 @@ async def get_plan_summary(
     return summary
 
 
-@router.post("/{plan_id}/finalize", summary="Finalize plan")
+@router.post("/plans/{plan_id}/finalize", summary="Finalize plan")
 async def finalize_plan(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -162,7 +152,7 @@ async def finalize_plan(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", summary="List plans")
+@router.get("/list", summary="List plans")
 async def list_plans(
     limit: int = 50,
     offset: int = 0,

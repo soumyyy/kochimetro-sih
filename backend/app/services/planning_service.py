@@ -5,6 +5,7 @@ Main orchestrator for the induction planning system
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 from sqlalchemy.orm import sessionmaker
 
 from .feature_extraction import FeatureExtractionService
@@ -42,7 +43,7 @@ class PlanningService:
 
         # Check if plan already exists
         existing_plan = await self.db.execute(
-            select(InductionPlan).where(InductionPlan.plan_date == plan_date)
+            select(InductionPlan.plan_id).where(InductionPlan.plan_date == plan_date)
         )
         if existing_plan.scalar_one_or_none():
             raise ValueError(f"Plan for {plan_date} already exists")
@@ -84,7 +85,7 @@ class PlanningService:
         """
         # Get plan
         plan_result = await self.db.execute(
-            select(InductionPlan).where(InductionPlan.plan_id == plan_id)
+            select(InductionPlan.plan_id).where(InductionPlan.plan_id == plan_id)
         )
         plan = plan_result.scalar_one_or_none()
 
@@ -133,7 +134,14 @@ class PlanningService:
     async def get_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         """Get plan details and results"""
         plan_result = await self.db.execute(
-            select(InductionPlan)
+            select(
+                InductionPlan.plan_id,
+                InductionPlan.plan_date,
+                InductionPlan.created_by,
+                InductionPlan.status,
+                InductionPlan.weights_json,
+                InductionPlan.notes
+            )
             .where(InductionPlan.plan_id == plan_id)
         )
         plan = plan_result.scalar_one_or_none()
@@ -169,12 +177,8 @@ class PlanningService:
             'plan_date': plan.plan_date,
             'status': plan.status,
             'weights': plan.weights_json,
-            'day_type': plan.day_type,
             'created_by': plan.created_by,
-            'finalized_at': plan.finalized_at,
             'notes': plan.notes,
-            'created_at': plan.created_at,
-            'updated_at': plan.updated_at,
             'items': [
                 {
                     'item_id': item.item_id,
@@ -251,7 +255,7 @@ class PlanningService:
         """Finalize a completed plan (lock for execution)"""
         # Get plan
         plan_result = await self.db.execute(
-            select(InductionPlan).where(InductionPlan.plan_id == plan_id)
+            select(InductionPlan.plan_id, InductionPlan.status).where(InductionPlan.plan_id == plan_id)
         )
         plan = plan_result.scalar_one_or_none()
 
@@ -281,7 +285,14 @@ class PlanningService:
     async def get_plans_list(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         """Get list of plans with pagination"""
         result = await self.db.execute(
-            select(InductionPlan)
+            select(
+                InductionPlan.plan_id,
+                InductionPlan.plan_date,
+                InductionPlan.created_by,
+                InductionPlan.status,
+                InductionPlan.weights_json,
+                InductionPlan.notes
+            )
             .order_by(InductionPlan.plan_date.desc())
             .limit(limit)
             .offset(offset)
@@ -292,11 +303,10 @@ class PlanningService:
             {
                 'plan_id': plan.plan_id,
                 'plan_date': plan.plan_date,
-                'status': plan.status,
-                'day_type': plan.day_type,
                 'created_by': plan.created_by,
-                'finalized_at': plan.finalized_at,
-                'created_at': plan.created_at
+                'status': plan.status,
+                'weights_json': plan.weights_json,
+                'notes': plan.notes
             } for plan in plans
         ]
 

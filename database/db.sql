@@ -12,7 +12,9 @@ CREATE TABLE public.users (
   user_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   username text NOT NULL UNIQUE,
   display_name text,
-  role text NOT NULL DEFAULT 'viewer'
+  role text NOT NULL DEFAULT 'viewer',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
 -- Table: depots
@@ -44,6 +46,8 @@ CREATE TABLE public.trains (
   status text NOT NULL DEFAULT 'unknown',
   current_bay uuid,
   notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
   CONSTRAINT trains_current_bay_fkey FOREIGN KEY (current_bay) REFERENCES public.stabling_bays(bay_id)
 );
 
@@ -66,6 +70,8 @@ CREATE TABLE public.induction_plans (
   status text NOT NULL DEFAULT 'draft',
   weights_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
   CONSTRAINT induction_plans_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(user_id)
 );
 
@@ -80,6 +86,8 @@ CREATE TABLE public.induction_plan_items (
   km_target numeric,
   notes text,
   explain_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
   CONSTRAINT induction_plan_items_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.induction_plans(plan_id),
   CONSTRAINT induction_plan_items_train_id_fkey FOREIGN KEY (train_id) REFERENCES public.trains(train_id),
   CONSTRAINT induction_plan_items_bay_id_fkey FOREIGN KEY (bay_id) REFERENCES public.stabling_bays(bay_id)
@@ -94,6 +102,7 @@ CREATE TABLE public.alerts (
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
   resolved boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
   CONSTRAINT alerts_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.induction_plans(plan_id)
 );
 

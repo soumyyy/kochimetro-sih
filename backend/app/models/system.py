@@ -11,6 +11,7 @@ from .base import Base, BaseSchema, BaseCreateSchema, BaseUpdateSchema
 if TYPE_CHECKING:
     from .train import Train
     from .plan import InductionPlan
+    from .user import User
 
 
 class Alert(Base):
@@ -52,11 +53,16 @@ class Override(Base):
         index=True
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True
+    )
 
     # Relationships
     plan: Mapped["InductionPlan"] = relationship(back_populates="overrides")
     train: Mapped["Train"] = relationship(back_populates="overrides")
+    user: Mapped[Optional["User"]] = relationship(back_populates="overrides")
 
 
 # Pydantic schemas

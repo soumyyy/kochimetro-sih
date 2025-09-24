@@ -84,8 +84,15 @@ class BrandingExposureLog(Base):
     )
     log_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     exposure_hours: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False, default=0)
+    campaign_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("branding_campaigns.campaign_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
 
     # Relationships
+    campaign: Mapped["BrandingCampaign"] = relationship(back_populates="exposure_logs")
     train: Mapped["Train"] = relationship()
 
 
@@ -132,6 +139,26 @@ class MileageLog(Base):
 
     # Relationships
     train: Mapped["Train"] = relationship()
+
+
+class Sponsor(Base):
+    """Sponsor model"""
+    __tablename__ = "sponsors"
+
+    sponsor_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    contact_person: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contract_start: Mapped[date] = mapped_column(Date, nullable=False)
+    contract_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    penalty_rate_per_hour: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)
+    payment_terms: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Relationships
+    campaigns: Mapped[List["BrandingCampaign"]] = relationship(back_populates="sponsor")
 
 
 # Pydantic schemas

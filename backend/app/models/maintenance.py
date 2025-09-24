@@ -36,7 +36,11 @@ class FitnessCertificate(Base):
         nullable=False,
         index=True
     )
-    dept: Mapped[str] = mapped_column(String(20), nullable=False)
+    dept: Mapped[str] = mapped_column(
+        String(10),
+        ForeignKey("departments.dept_code", ondelete="CASCADE"),
+        nullable=False
+    )
     valid_from: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     valid_to: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
