@@ -23,7 +23,12 @@ interface CardContentProps {
 
 export function Card({ className, children }: CardProps) {
   return (
-    <div className={clsx('rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm', className)}>
+    <div
+      className={clsx(
+        'rounded-3xl border border-white/15 bg-white/10 text-white shadow-[0_24px_80px_-36px_rgba(15,23,42,0.8)] backdrop-blur-xl transition-colors duration-300',
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -31,7 +36,7 @@ export function Card({ className, children }: CardProps) {
 
 export function CardHeader({ className, children }: CardHeaderProps) {
   return (
-    <div className={clsx('flex flex-col space-y-1.5 p-6', className)}>
+    <div className={clsx('flex flex-col space-y-1.5 px-6 pt-6', className)}>
       {children}
     </div>
   )
@@ -39,7 +44,7 @@ export function CardHeader({ className, children }: CardHeaderProps) {
 
 export function CardTitle({ className, children }: CardTitleProps) {
   return (
-    <h3 className={clsx('text-2xl font-semibold leading-none tracking-tight', className)}>
+    <h3 className={clsx('text-xl font-semibold leading-snug tracking-tight sm:text-2xl', className)}>
       {children}
     </h3>
   )
@@ -47,7 +52,7 @@ export function CardTitle({ className, children }: CardTitleProps) {
 
 export function CardContent({ className, children }: CardContentProps) {
   return (
-    <div className={clsx('p-6 pt-0', className)}>
+    <div className={clsx('px-6 pb-6 pt-5', className)}>
       {children}
     </div>
   )

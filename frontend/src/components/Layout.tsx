@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Calendar,
   MapPin,
   BarChart3,
-  Menu,
-  X,
   Sparkles,
   Clock
 } from 'lucide-react'
@@ -25,7 +23,6 @@ const navigation = [
 ]
 
 export default function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const planMeta = useMemo(() => {
     return {
@@ -36,149 +33,62 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.1),transparent_55%),radial-gradient(circle_at_80%_0%,rgba(96,165,250,0.08),transparent_45%),linear-gradient(180deg,rgba(15,23,42,0.05)_0%,rgba(15,23,42,0.02)_45%,rgba(15,23,42,0)_100%)]">
-      {/* Sidebar for mobile */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-slate-900/60" onClick={() => setSidebarOpen(false)} />
-        <div className="relative flex w-full max-w-xs flex-1 flex-col bg-slate-900 text-slate-100 shadow-2xl">
-          <div className="absolute top-0 right-0 -mr-12 pt-4">
-            <button
-              type="button"
-              className="ml-1 flex h-10 w-10 items-center justify-center rounded-full bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-5 w-5 text-slate-100" />
-            </button>
-          </div>
-          <div className="flex flex-1 flex-col pt-6 pb-6 overflow-y-auto">
-            <div className="px-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">KMRL Planner</p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">Induction & IBL</h1>
-              <p className="mt-1 text-xs text-slate-400">{planMeta.datasetRange}</p>
-            </div>
-            <nav className="mt-8 flex-1 space-y-1 px-2">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`group flex flex-col rounded-lg px-3 py-3 text-sm transition ${
-                      isActive
-                        ? 'bg-white/10 text-white shadow-inner'
-                        : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                    }`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      <span className="font-medium">{item.name}</span>
-                    </div>
-                    <span className="mt-1 text-[11px] text-slate-400">{item.blurb}</span>
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-        </div>
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(56,189,248,0.18),transparent_55%),radial-gradient(circle_at_80%_10%,rgba(14,165,233,0.12),transparent_50%),linear-gradient(180deg,rgba(15,23,42,0.6)_0%,rgba(15,23,42,0.2)_45%,rgba(15,23,42,0.6)_100%)]"
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-white/10" aria-hidden="true" />
 
-      {/* Static sidebar for desktop */}
-      <aside className="hidden lg:flex lg:w-72 lg:flex-col">
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-900 text-slate-100">
-          <div className="absolute inset-0 opacity-60" aria-hidden="true">
-            <div className="h-full w-full bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950" />
-          </div>
-          <div className="relative z-10 flex flex-1 flex-col pt-8 pb-6">
-            <div className="px-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">KMRL Planner</p>
-              <h1 className="mt-2 text-2xl font-semibold text-white">Induction & IBL</h1>
-              <p className="mt-2 text-xs leading-snug text-slate-400">{planMeta.datasetRange}</p>
-            </div>
-            <nav className="mt-8 flex-1 space-y-2 px-4">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`group flex flex-col rounded-xl px-4 py-3 transition ${
-                      isActive
-                        ? 'bg-white/12 text-white shadow-[0_20px_45px_-30px_rgba(15,23,42,0.9)]'
-                        : 'text-slate-300 hover:bg-white/6 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sm font-medium">{item.name}</span>
-                    </div>
-                    <span className="mt-1 text-[11px] text-slate-400">{item.blurb}</span>
-                  </Link>
-                )
-              })}
-            </nav>
-            <div className="px-6 pt-4">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Plan window</p>
-                <p className="mt-1 flex items-center gap-2 text-sm font-medium text-white">
-                  <Clock className="h-4 w-4 text-slate-300" />
-                  Tonight · 21:00 – 05:30 IST
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">Last refresh {planMeta.lastRefresh}</p>
+      <div className="relative z-10 flex min-h-screen flex-col px-4 pt-8 pb-36 sm:px-6 lg:px-12">
+        <header className="mx-auto w-full max-w-6xl rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
+                <Sparkles className="h-4 w-4 text-sky-200" />
+                Plan window
               </div>
+              <p className="text-xl font-semibold text-white sm:text-2xl">{planMeta.windowLabel}</p>
+              <p className="text-sm text-white/70">{planMeta.datasetRange}</p>
             </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="flex flex-1 flex-col lg:pl-0">
-        <header className="sticky top-0 z-40 flex h-16 items-center border-b border-slate-200/60 bg-white/85 backdrop-blur">
-          <button
-            type="button"
-            className="border-r border-slate-200 px-4 text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          <div className="flex flex-1 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-600">Plan window</p>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary-600" />
-                <span className="text-sm font-semibold text-slate-800">{planMeta.windowLabel}</span>
+            <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/15 px-4 py-3 backdrop-blur-xl">
+              <Clock className="h-4 w-4 text-sky-200" />
+              <div className="leading-tight">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">Last sync</p>
+                <p className="text-sm font-semibold text-white">{planMeta.lastRefresh}</p>
               </div>
-            </div>
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Last refresh</span>
-                <span className="text-xs font-semibold text-slate-700">{planMeta.lastRefresh}</span>
-              </div>
-              <button className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100/70 px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
-                Dataset notes
-              </button>
-              <Link
-                to="/planboard"
-                className="inline-flex items-center rounded-full bg-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-[0_18px_35px_-20px_rgba(37,99,235,0.75)] transition hover:bg-blue-700"
-              >
-                Open plan board
-              </Link>
             </div>
           </div>
         </header>
 
-        <div className="relative flex-1 overflow-y-auto focus:outline-none">
-          <div
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[length:32px_32px] opacity-20"
-            aria-hidden="true"
-          />
-          <main className="relative z-10 py-6">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10">
-              {children}
-            </div>
-          </main>
-        </div>
+        <main className="mx-auto mt-10 w-full max-w-6xl flex-1 pb-10">
+          <div className="space-y-10">
+            {children}
+          </div>
+        </main>
       </div>
+
+      <nav className="fixed bottom-7 left-1/2 z-30 flex w-[min(90%,680px)] -translate-x-1/2 items-center justify-between gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-3 backdrop-blur-2xl shadow-[0_24px_80px_-36px_rgba(15,23,42,0.9)]">
+        {navigation.map((item) => {
+          const isActive = location.pathname === item.href
+          return (
+            <Link
+              key={item.name}
+              to={item.href}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm transition-all ${
+                isActive
+                  ? 'bg-white/90 text-slate-900 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.8)]'
+                  : 'text-white/80 hover:bg-white/25 hover:text-white'
+              }`}
+            >
+              <item.icon className={`h-4 w-4 ${isActive ? 'text-slate-900' : 'text-white/70'}`} />
+              <span className="hidden text-sm font-medium sm:inline-block">{item.name}</span>
+            </Link>
+          )
+        })}
+      </nav>
+
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 h-36 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" aria-hidden="true" />
     </div>
   )
 }
