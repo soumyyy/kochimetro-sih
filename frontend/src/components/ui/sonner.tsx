@@ -27,10 +27,11 @@ const colorMap = {
   info: 'text-blue-600',
 }
 
-export function Toaster({ toasts = [] }: ToasterProps) {
-  const [visibleToasts, setVisibleToasts] = useState<Toast[]>([])
+export function Toaster({ toasts }: ToasterProps) {
+  const [visibleToasts, setVisibleToasts] = useState<Toast[]>(toasts ?? [])
 
   useEffect(() => {
+    if (toasts === undefined) return
     setVisibleToasts(toasts)
   }, [toasts])
 

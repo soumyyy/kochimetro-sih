@@ -157,6 +157,16 @@ async def list_plans(
     return {"plans": plans}
 
 
+@router.get("/latest", summary="Get latest plan with details")
+async def get_latest_plan_details(db: AsyncSession = Depends(get_db)):
+    """Return latest plan and enriched per-train details"""
+    planning_service = PlanningService(db)
+    plan_details = await planning_service.get_latest_plan_details()
+    if not plan_details:
+        raise HTTPException(status_code=404, detail="No plans found")
+    return plan_details
+
+
 @router.get("/fleet/status", summary="Get fleet status")
 async def get_fleet_status(
     db: AsyncSession = Depends(get_db)

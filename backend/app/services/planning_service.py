@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
 from .feature_extraction import FeatureExtractionService
 from .optimization import OptimizationService
@@ -16,6 +16,8 @@ from ..models import (
     InductionPlanItem,
     BayOccupancy,
     Alert,
+    StablingBay,
+    Train,
 )
 
 
@@ -239,6 +241,158 @@ class PlanningService:
             for plan in plans
         ]
 
+    async def get_recent_plans(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Return recent plans ordered by date desc"""
+        result = await self.db.execute(
+            select(InductionPlan)
+            .order_by(InductionPlan.plan_date.desc())
+            .limit(limit)
+        )
+        plans = result.scalars().all()
+        return [
+            {
+                "plan_id": str(plan.plan_id),
+                "plan_date": plan.plan_date.isoformat(),
+                "status": plan.status,
+                "active_count": await self._count_items(plan.plan_id, "active"),
+                "standby_count": await self._count_items(plan.plan_id, "standby"),
+                "ibl_count": await self._count_items(plan.plan_id, "ibl"),
+            }
+            for plan in plans
+        ]
+
+    async def get_recent_alerts(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch recent alerts across plans"""
+        result = await self.db.execute(
+            select(Alert, InductionPlan.plan_date)
+            .outerjoin(InductionPlan, Alert.plan_id == InductionPlan.plan_id)
+            .order_by(Alert.created_at.desc())
+            .limit(limit)
+        )
+        rows = result.all()
+        return [
+            {
+                "alert_id": alert.alert_id,
+                "plan_id": str(alert.plan_id) if alert.plan_id else None,
+                "plan_date": plan_date.isoformat() if plan_date else None,
+                "severity": alert.severity,
+                "message": alert.message,
+                "resolved": alert.resolved,
+                "created_at": alert.created_at.isoformat() if alert.created_at else None,
+            }
+            for alert, plan_date in rows
+        ]
+
+    async def get_plan_date_range(self) -> Optional[Dict[str, str]]:
+        """Return the min/max plan dates in the system"""
+        result = await self.db.execute(
+            select(func.min(InductionPlan.plan_date), func.max(InductionPlan.plan_date))
+        )
+        min_date, max_date = result.one()
+        if not min_date and not max_date:
+            return None
+        return {
+            "start": min_date.isoformat() if min_date else None,
+            "end": max_date.isoformat() if max_date else None,
+        }
+
+    async def get_latest_plan_snapshot(self) -> Optional[Dict[str, Any]]:
+        """Get counts and metadata for the most recent plan"""
+        plan = await self._get_latest_plan_record()
+        if not plan:
+            return None
+
+        counts_result = await self.db.execute(
+            select(InductionPlanItem.decision, func.count())
+            .where(InductionPlanItem.plan_id == plan.plan_id)
+            .group_by(InductionPlanItem.decision)
+        )
+        counts_map = {row[0]: row[1] for row in counts_result.all()}
+
+        return {
+            "plan_id": str(plan.plan_id),
+            "plan_date": plan.plan_date.isoformat(),
+            "status": plan.status,
+            "counts": {
+                "active": counts_map.get("active", 0),
+                "standby": counts_map.get("standby", 0),
+                "ibl": counts_map.get("ibl", 0),
+            },
+        }
+
+    async def get_latest_plan_details(self) -> Optional[Dict[str, Any]]:
+        """Return the latest plan with enriched per-train details"""
+        plan = await self._get_latest_plan_record()
+        if not plan:
+            return None
+
+        rows = await self.db.execute(
+            select(InductionPlanItem, Train)
+            .join(Train, Train.train_id == InductionPlanItem.train_id)
+            .where(InductionPlanItem.plan_id == plan.plan_id)
+            .order_by(InductionPlanItem.turnout_rank.nulls_last(), InductionPlanItem.train_id)
+        )
+        plan_rows = rows.all()
+
+        bay_ids = {item.bay_id for item, _ in plan_rows if item.bay_id}
+        bay_lookup: Dict[uuid.UUID, StablingBay] = {}
+        if bay_ids:
+            bay_result = await self.db.execute(
+                select(StablingBay).where(StablingBay.bay_id.in_(bay_ids))
+            )
+            bay_lookup = {bay.bay_id: bay for bay in bay_result.scalars()}
+
+        features = await self.feature_service.extract_features(plan.plan_date)
+
+        items: List[Dict[str, Any]] = []
+        counts = {"active": 0, "standby": 0, "ibl": 0}
+
+        for item, train in plan_rows:
+            counts[item.decision] = counts.get(item.decision, 0) + 1
+            feature = features.get(item.train_id)
+
+            priority = "low"
+            if feature:
+                if feature.critical_wo_count > 0 or feature.wo_blocking:
+                    priority = "high"
+                elif feature.brand_rolling_deficit_h > 0 or feature.needs_clean:
+                    priority = "medium"
+
+            bay = bay_lookup.get(item.bay_id) if item.bay_id else None
+
+            items.append(
+                {
+                    "train_id": item.train_id,
+                    "decision": item.decision,
+                    "priority": priority,
+                    "turnout_rank": item.turnout_rank,
+                    "bay_id": str(item.bay_id) if item.bay_id else None,
+                    "bay_position": bay.position_idx if bay else None,
+                    "wrap_id": train.wrap_id,
+                    "brand_code": train.brand_code,
+                    "fitness_ok": feature.fit_ok if feature else None,
+                    "wo_blocking": feature.wo_blocking if feature else None,
+                    "brand_deficit": round(feature.brand_rolling_deficit_h, 2) if feature else 0.0,
+                    "mileage_deviation": round(feature.mileage_dev, 1) if feature else 0.0,
+                    "cleaning_needed": feature.needs_clean if feature else False,
+                    "clean_type": feature.clean_type if feature else None,
+                    "explanation": item.explain_json,
+                }
+            )
+
+        return {
+            "plan_id": str(plan.plan_id),
+            "plan_date": plan.plan_date.isoformat(),
+            "status": plan.status,
+            "summary": {
+                "active": counts.get("active", 0),
+                "standby": counts.get("standby", 0),
+                "ibl": counts.get("ibl", 0),
+                "total": sum(counts.values()),
+            },
+            "items": items,
+        }
+
     async def get_plan_summary(self, plan_id: str) -> Optional[Dict[str, Any]]:
         """Get summary statistics for a plan"""
         plan_data = await self.get_plan(plan_id)
@@ -259,6 +413,23 @@ class PlanningService:
             "ibl_count": ibl_count,
             "total_trains": len(items),
         }
+
+    async def _count_items(self, plan_id: uuid.UUID, decision: str) -> int:
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(InductionPlanItem)
+            .where(InductionPlanItem.plan_id == plan_id)
+            .where(InductionPlanItem.decision == decision)
+        )
+        return result.scalar() or 0
+
+    async def _get_latest_plan_record(self) -> Optional[InductionPlan]:
+        result = await self.db.execute(
+            select(InductionPlan)
+            .order_by(InductionPlan.plan_date.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     def _parse_plan_id(self, plan_id: str) -> uuid.UUID:
         """Convert incoming plan id to UUID"""

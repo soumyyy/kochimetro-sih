@@ -5,7 +5,7 @@ Provides utilities for managing fleet data and calculations
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from collections import defaultdict
 
 from ..models import (
@@ -67,12 +67,12 @@ class FleetService:
         if not mileage_data:
             return {'average': 0, 'std_dev': 0, 'total': 0}
 
-        mileages = [row.total_km or 0 for row in mileage_data]
+        mileages = [float(row.total_km or 0) for row in mileage_data]
         total_km = sum(mileages)
         average_km = total_km / len(mileages)
 
         # Calculate standard deviation
-        variance = sum((x - average_km) ** 2 for x in mileages) / len(mileages)
+        variance = sum((float(x) - average_km) ** 2 for x in mileages) / len(mileages)
         std_dev = variance ** 0.5
 
         return {

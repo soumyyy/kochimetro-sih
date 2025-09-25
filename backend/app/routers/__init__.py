@@ -8,7 +8,8 @@ from app.routers import (
     reference,
     branding,
     mileage,
-    alerts
+    alerts,
+    dashboard,
 )
 
 api_router = APIRouter()
@@ -20,3 +21,4 @@ api_router.include_router(reference.router, prefix="/ref", tags=["reference"])
 api_router.include_router(branding.router, prefix="/branding", tags=["branding"])
 api_router.include_router(mileage.router, prefix="/mileage", tags=["mileage"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

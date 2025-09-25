@@ -24,9 +24,6 @@ class BrandingCampaign(Base):
     min_daily_hours: Mapped[float] = mapped_column(Numeric, nullable=False, default=0)
     penalty_weight: Mapped[float] = mapped_column(Numeric, nullable=False, default=1)
 
-    # Relationships
-    exposure_logs: Mapped[List["BrandingExposureLog"]] = relationship(back_populates="campaign")
-
 
 class BrandingExposureLog(Base):
     """Daily exposure tracking"""
@@ -38,12 +35,8 @@ class BrandingExposureLog(Base):
     )
     log_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     exposure_hours: Mapped[float] = mapped_column(Numeric, nullable=False, default=0)
-    wrap_id: Mapped[Optional[str]] = mapped_column(
-        Text, ForeignKey("branding_campaigns.wrap_id", ondelete="SET NULL"), nullable=True
-    )
 
     # Relationships
-    campaign: Mapped[Optional["BrandingCampaign"]] = relationship(back_populates="exposure_logs")
     train: Mapped["Train"] = relationship(back_populates="exposure_logs")
 
 
