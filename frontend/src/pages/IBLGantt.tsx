@@ -1,352 +1,334 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import Layout from '../components/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import {
+  ClipboardList,
   Clock,
-  Users,
-  AlertTriangle,
-  CheckCircle
+  MapPin,
+  TrainFront
 } from 'lucide-react'
 
-interface IBLJob {
-  id: string
-  train_id: string
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const SLOT_WIDTH_REM = 4
+const SLOTS_PER_WINDOW = 18
+const SLOT_MINUTES = 30
+
+interface LatestPlanMeta {
+  plan_id: string
+  plan_date: string
+  status: string
+}
+
+interface PlanDetailsResponse {
+  plan_id: string
+  plan_date: string
+  status: string
+  ibl_gantt: Array<IBLGanttSlot>
+}
+
+interface IBLGanttSlot {
   bay_id: string
-  start_time: string
-  end_time: string
-  duration_hours: number
-  type: 'cleaning' | 'maintenance' | 'inspection'
-  priority: 'high' | 'medium' | 'low'
-  assigned_crew: string[]
-  status: 'scheduled' | 'in_progress' | 'completed' | 'delayed'
+  train_id: string
+  from_ts: string
+  to_ts: string
 }
 
-const mockJobs: IBLJob[] = [
-  {
-    id: 'job-001',
-    train_id: 'TS-15',
-    bay_id: 'B-01',
-    start_time: '21:00',
-    end_time: '23:30',
-    duration_hours: 2.5,
-    type: 'cleaning',
-    priority: 'high',
-    assigned_crew: ['Crew-A', 'Crew-B'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-002',
-    train_id: 'TS-17',
-    bay_id: 'B-02',
-    start_time: '21:15',
-    end_time: '22:45',
-    duration_hours: 1.5,
-    type: 'maintenance',
-    priority: 'high',
-    assigned_crew: ['Crew-C'],
-    status: 'in_progress'
-  },
-  {
-    id: 'job-003',
-    train_id: 'TS-21',
-    bay_id: 'B-03',
-    start_time: '22:00',
-    end_time: '01:30',
-    duration_hours: 3.5,
-    type: 'inspection',
-    priority: 'high',
-    assigned_crew: ['Crew-D', 'Crew-E'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-004',
-    train_id: 'TS-16',
-    bay_id: 'B-04',
-    start_time: '22:30',
-    end_time: '23:15',
-    duration_hours: 0.75,
-    type: 'cleaning',
-    priority: 'medium',
-    assigned_crew: ['Crew-F'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-005',
-    train_id: 'TS-18',
-    bay_id: 'B-05',
-    start_time: '23:00',
-    end_time: '00:30',
-    duration_hours: 1.5,
-    type: 'maintenance',
-    priority: 'medium',
-    assigned_crew: ['Crew-G'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-006',
-    train_id: 'TS-25',
-    bay_id: 'B-06',
-    start_time: '23:30',
-    end_time: '02:00',
-    duration_hours: 2.5,
-    type: 'cleaning',
-    priority: 'high',
-    assigned_crew: ['Crew-A', 'Crew-B'],
-    status: 'delayed'
-  },
-  {
-    id: 'job-007',
-    train_id: 'TS-19',
-    bay_id: 'B-07',
-    start_time: '00:00',
-    end_time: '01:00',
-    duration_hours: 1.0,
-    type: 'cleaning',
-    priority: 'low',
-    assigned_crew: ['Crew-H'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-008',
-    train_id: 'TS-20',
-    bay_id: 'B-08',
-    start_time: '01:30',
-    end_time: '02:30',
-    duration_hours: 1.0,
-    type: 'maintenance',
-    priority: 'medium',
-    assigned_crew: ['Crew-I'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-009',
-    train_id: 'TS-22',
-    bay_id: 'B-09',
-    start_time: '02:00',
-    end_time: '03:30',
-    duration_hours: 1.5,
-    type: 'cleaning',
-    priority: 'medium',
-    assigned_crew: ['Crew-J'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-010',
-    train_id: 'TS-23',
-    bay_id: 'B-10',
-    start_time: '03:00',
-    end_time: '04:00',
-    duration_hours: 1.0,
-    type: 'inspection',
-    priority: 'low',
-    assigned_crew: ['Crew-K'],
-    status: 'scheduled'
-  },
-  {
-    id: 'job-011',
-    train_id: 'TS-24',
-    bay_id: 'B-11',
-    start_time: '04:00',
-    end_time: '05:00',
-    duration_hours: 1.0,
-    type: 'cleaning',
-    priority: 'medium',
-    assigned_crew: ['Crew-L'],
-    status: 'scheduled'
-  },
-]
-
-const timeSlots = [
-  '21:00', '21:30', '22:00', '22:30', '23:00', '23:30',
-  '00:00', '00:30', '01:00', '01:30', '02:00', '02:30',
-  '03:00', '03:30', '04:00', '04:30', '05:00', '05:30'
-]
-
-const getJobPosition = (startTime: string, endTime: string) => {
-  const startIndex = timeSlots.indexOf(startTime)
-  const endIndex = timeSlots.indexOf(endTime)
-  return { startIndex, endIndex }
+interface GanttJob {
+  bay_id: string
+  train_id: string
+  start: Date
+  end: Date
+  durationHours: number
+  startIndex: number
+  endIndex: number
 }
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'completed': return 'bg-green-100 border-green-300'
-    case 'in_progress': return 'bg-blue-100 border-blue-300'
-    case 'delayed': return 'bg-red-100 border-red-300'
-    default: return 'bg-orange-100 border-orange-300'
+const fetchLatestPlanMeta = async (): Promise<LatestPlanMeta | null> => {
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}/api/v1/plans/latest`, {
+      params: { include_features: false },
+    })
+    return {
+      plan_id: data.plan_id,
+      plan_date: data.plan_date,
+      status: data.status,
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null
+    }
+    throw error
   }
 }
 
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'high': return 'bg-red-100 text-red-800'
-    case 'medium': return 'bg-yellow-100 text-yellow-800'
-    default: return 'bg-gray-100 text-gray-800'
-  }
+const fetchPlanDetails = async (planId: string): Promise<PlanDetailsResponse> => {
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/plans/${planId}`)
+  return data
 }
+
+const formatTime = (date: Date): string =>
+  date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+
+const minutesBetween = (start: Date, end: Date): number =>
+  (end.getTime() - start.getTime()) / (1000 * 60)
 
 export default function IBLGantt() {
-  const [jobs] = useState<IBLJob[]>(mockJobs)
+  const {
+    data: planMeta,
+    isLoading: metaLoading,
+    error: metaError,
+  } = useQuery({ queryKey: ['latest-plan-meta'], queryFn: fetchLatestPlanMeta })
+
+  const planId = planMeta?.plan_id
+
+  const {
+    data: planDetails,
+    isLoading: detailsLoading,
+    error: detailsError,
+  } = useQuery({
+    queryKey: ['plan-details', planId],
+    queryFn: () => fetchPlanDetails(planId!),
+    enabled: Boolean(planId),
+  })
+
+  const isLoading = metaLoading || (Boolean(planId) && detailsLoading)
+  const queryError = (metaError ?? detailsError) ?? null
+
+  const planDateIso = planDetails?.plan_date ?? planMeta?.plan_date ?? null
+  const planStatus = planDetails?.status ?? planMeta?.status ?? 'unknown'
+
+  const windowStart = useMemo(() => {
+    if (planDateIso) {
+      return new Date(`${planDateIso}T21:00:00`)
+    }
+    const firstSlot = planDetails?.ibl_gantt?.[0]
+    if (firstSlot) {
+      const start = new Date(firstSlot.from_ts)
+      start.setHours(21, 0, 0, 0)
+      return start
+    }
+    return null
+  }, [planDateIso, planDetails?.ibl_gantt])
+
+  const timeSlots = useMemo(() => {
+    if (!windowStart) return []
+    return Array.from({ length: SLOTS_PER_WINDOW }, (_, idx) => {
+      const slotTime = new Date(windowStart.getTime() + idx * SLOT_MINUTES * 60 * 1000)
+      return formatTime(slotTime)
+    })
+  }, [windowStart])
+
+  const jobs: GanttJob[] = useMemo(() => {
+    if (!windowStart || !planDetails?.ibl_gantt?.length) {
+      return []
+    }
+
+    return planDetails.ibl_gantt
+      .map((slot) => {
+        const start = new Date(slot.from_ts)
+        const end = new Date(slot.to_ts)
+        const durationMinutes = minutesBetween(start, end)
+        const startOffset = minutesBetween(windowStart, start)
+        const endOffset = startOffset + durationMinutes
+
+        const startIndex = Math.max(startOffset / SLOT_MINUTES, 0)
+        const endIndex = Math.max(endOffset / SLOT_MINUTES, startIndex)
+
+        return {
+          bay_id: slot.bay_id,
+          train_id: slot.train_id,
+          start,
+          end,
+          durationHours: Math.max(durationMinutes / 60, 0),
+          startIndex,
+          endIndex,
+        }
+      })
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
+  }, [planDetails?.ibl_gantt, windowStart])
+
+  const uniqueBays = useMemo(() => new Set(jobs.map((job) => job.bay_id)).size, [jobs])
+  const uniqueTrains = useMemo(() => new Set(jobs.map((job) => job.train_id)).size, [jobs])
+  const totalHours = useMemo(
+    () => jobs.reduce((sum, job) => sum + job.durationHours, 0),
+    [jobs],
+  )
+
+  if (queryError) {
+    let message = 'Failed to load IBL schedule'
+    if (axios.isAxiosError(queryError)) {
+      message = queryError.response?.data?.detail ?? queryError.message
+    } else if (queryError instanceof Error) {
+      message = queryError.message
+    }
+
+    return (
+      <Layout>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-800">
+          {message}
+        </div>
+      </Layout>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          <div className="h-8 w-48 rounded bg-slate-200 animate-pulse" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
+            ))}
+          </div>
+          <div className="h-[480px] rounded-2xl bg-slate-100 animate-pulse" />
+        </div>
+      </Layout>
+    )
+  }
+
+  if (!planMeta || !planId) {
+    return (
+      <Layout>
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
+          No plans found. Seed the database and refresh to view the IBL schedule.
+        </div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">IBL Gantt Chart</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Night work schedule (21:00 - 05:30)
+            <h1 className="text-2xl font-semibold text-slate-900">IBL Gantt Chart</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Night work schedule for {planDateIso ? new Date(planDateIso).toLocaleDateString() : 'upcoming plan'}
             </p>
           </div>
-          <div className="flex space-x-3">
-            <Badge variant="info">Target: 05:30 completion</Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="info">Plan status: {planStatus}</Badge>
+            {planDetails?.plan_id && (
+              <Badge variant="secondary">Plan ID: {planDetails.plan_id}</Badge>
+            )}
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <Clock className="w-8 h-8 text-orange-500 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">{jobs.length}</div>
-                  <div className="text-sm text-gray-600">Total Jobs</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <CheckCircle className="w-8 h-8 text-green-500 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {jobs.filter(j => j.status === 'completed').length}
-                  </div>
-                  <div className="text-sm text-gray-600">Completed</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <AlertTriangle className="w-8 h-8 text-red-500 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {jobs.filter(j => j.status === 'delayed').length}
-                  </div>
-                  <div className="text-sm text-gray-600">Delayed</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <Users className="w-8 h-8 text-blue-500 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {jobs.filter(j => j.status === 'in_progress').length}
-                  </div>
-                  <div className="text-sm text-gray-600">In Progress</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <SummaryCard
+            label="Night jobs"
+            value={jobs.length}
+            icon={ClipboardList}
+            accent="text-blue-600"
+          />
+          <SummaryCard
+            label="Total hours"
+            value={totalHours.toFixed(1)}
+            icon={Clock}
+            accent="text-emerald-600"
+          />
+          <SummaryCard
+            label="Unique trains"
+            value={uniqueTrains}
+            icon={TrainFront}
+            accent="text-indigo-600"
+          />
+          <SummaryCard
+            label="Bays utilised"
+            value={uniqueBays}
+            icon={MapPin}
+            accent="text-amber-600"
+          />
         </div>
 
-        {/* Gantt Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Maintenance Schedule</CardTitle>
+            <CardTitle>Maintenance schedule</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <div className="min-w-full">
-                {/* Header with time slots */}
-                <div className="flex border-b">
-                  <div className="w-32 flex-shrink-0 p-2 font-semibold text-sm text-gray-900">
-                    Bay / Train
-                  </div>
-                  {timeSlots.map((time) => (
-                    <div
-                      key={time}
-                      className="w-16 flex-shrink-0 p-2 text-center text-xs font-medium text-gray-500 border-l"
-                    >
-                      {time}
+            {jobs.length === 0 || !windowStart ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center text-sm text-slate-500">
+                No IBL occupancy recorded for this plan window.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="min-w-full">
+                  <div className="flex border-b">
+                    <div className="w-36 flex-shrink-0 p-2 font-semibold text-sm text-slate-900">
+                      Bay / Train
                     </div>
-                  ))}
-                </div>
+                    {timeSlots.map((label) => (
+                      <div
+                        key={label}
+                        className="w-16 flex-shrink-0 border-l p-2 text-center text-xs font-medium text-slate-500"
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
 
-                {/* Job rows */}
-                <div className="space-y-1">
-                  {jobs.map((job) => {
-                    const { startIndex, endIndex } = getJobPosition(job.start_time, job.end_time)
-                    const width = (endIndex - startIndex + 1) * 4 // 4rem per slot
+                  <div className="space-y-1">
+                    {jobs.map((job) => {
+                      const widthRem = Math.max(job.endIndex - job.startIndex, 0.5) * SLOT_WIDTH_REM
+                      const leftRem = Math.max(job.startIndex, 0) * SLOT_WIDTH_REM
 
-                    return (
-                      <div key={job.id} className="flex items-center border-b border-gray-100">
-                        {/* Job info */}
-                        <div className="w-32 flex-shrink-0 p-2">
-                          <div className="font-medium text-sm text-gray-900">
-                            {job.bay_id}
+                      return (
+                        <div key={`${job.bay_id}-${job.train_id}-${job.start.toISOString()}`} className="flex border-b border-slate-100">
+                          <div className="w-36 flex-shrink-0 p-2">
+                            <div className="font-medium text-sm text-slate-900">{job.bay_id}</div>
+                            <div className="text-xs text-slate-600">{job.train_id}</div>
+                            <div className="text-xs text-slate-500">
+                              {formatTime(job.start)} – {formatTime(job.end)}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-600">
-                            {job.train_id}
-                          </div>
-                          <Badge className={getPriorityColor(job.priority)}>
-                            {job.priority}
-                          </Badge>
-                        </div>
-
-                        {/* Timeline */}
-                        <div className="flex-1 relative h-12">
-                          {/* Job bar */}
-                          <div
-                            className={`absolute top-1 h-10 rounded ${getStatusColor(job.status)} border flex items-center px-2`}
-                            style={{
-                              left: `${startIndex * 4}rem`,
-                              width: `${width}rem`
-                            }}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-gray-900 truncate">
-                                {job.type} ({job.duration_hours}h)
-                              </div>
-                              <div className="text-xs text-gray-600 truncate">
-                                {job.assigned_crew.join(', ')}
-                              </div>
+                          <div className="relative flex-1">
+                            <div
+                              className="absolute top-1 flex h-10 items-center overflow-hidden rounded border border-blue-200 bg-blue-50 px-3 text-xs text-blue-800"
+                              style={{ left: `${leftRem}rem`, width: `${widthRem}rem` }}
+                            >
+                              <span className="truncate">{job.durationHours.toFixed(1)} h scheduled</span>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Empty rows for unoccupied bays */}
-                {['B-12', 'B-13', 'B-14', 'B-15'].map((bayId) => (
-                  <div key={bayId} className="flex items-center border-b border-gray-100">
-                    <div className="w-32 flex-shrink-0 p-2">
-                      <div className="font-medium text-sm text-gray-400">
-                        {bayId}
-                      </div>
-                      <div className="text-xs text-gray-300">
-                        Available
-                      </div>
-                    </div>
-                    <div className="flex-1 h-12 bg-gray-50"></div>
+                      )
+                    })}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </Layout>
+  )
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon: Icon,
+  accent,
+}: {
+  label: string
+  value: number | string
+  icon: typeof ClipboardList
+  accent: string
+}) {
+  return (
+    <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className="rounded-xl bg-slate-100 p-2">
+          <Icon className={`h-5 w-5 ${accent}`} />
+        </div>
+        <div>
+          <div className="text-xl font-semibold text-slate-900">{value}</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

@@ -1,7 +1,7 @@
 """
 Planning and optimization endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
@@ -37,10 +37,19 @@ class PlanRunResponse(BaseModel):
     turnout: list
 
 
+class PlanOverrideRequest(BaseModel):
+    """Manual override payload"""
+    decision: Optional[str] = None
+    bay_id: Optional[str] = None
+    turnout_rank: Optional[int] = None
+    notes: Optional[str] = None
+    reason: str
+
+
 class WhatIfRequest(BaseModel):
     """What-if analysis request"""
-    force: Optional[Dict[str, Any]] = None
-    ban: Optional[Dict[str, Any]] = None
+    force: Optional[Any] = None
+    ban: Optional[Any] = None
     weight_deltas: Optional[Dict[str, float]] = None
 
 
@@ -86,12 +95,21 @@ async def run_plan(
 async def override_plan_item(
     plan_id: str,
     train_id: str,
-    override_data: Dict[str, Any],
+    override: PlanOverrideRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Manually override a train assignment"""
-    # TODO: Implement override logic
-    return {"message": "Override applied"}
+    planning_service = PlanningService(db)
+    payload = override.dict(exclude_unset=True)
+
+    if "decision" in payload and payload["decision"]:
+        payload["decision"] = payload["decision"].lower()
+
+    try:
+        result = await planning_service.apply_override(plan_id, train_id, payload)
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/plans/{plan_id}/explain/{train_id}", summary="Get explanation")
@@ -101,8 +119,11 @@ async def get_explanation(
     db: AsyncSession = Depends(get_db)
 ):
     """Get decision explanation for a specific train"""
-    # TODO: Implement explanation logic
-    return {"reasons": [], "scores": {}}
+    planning_service = PlanningService(db)
+    explanation = await planning_service.get_item_explanation(plan_id, train_id)
+    if not explanation:
+        raise HTTPException(status_code=404, detail="Plan item not found")
+    return explanation
 
 
 @router.get("/plans/{plan_id}", summary="Get plan details")
@@ -158,10 +179,14 @@ async def list_plans(
 
 
 @router.get("/latest", summary="Get latest plan with details")
-async def get_latest_plan_details(db: AsyncSession = Depends(get_db)):
-    """Return latest plan and enriched per-train details"""
+async def get_latest_plan_details(
+    plan_date: Optional[date] = Query(None, description="Plan date to fetch (defaults to latest)"),
+    include_features: bool = Query(True, description="Include per-train feature data"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return plan details (latest by default)"""
     planning_service = PlanningService(db)
-    plan_details = await planning_service.get_latest_plan_details()
+    plan_details = await planning_service.get_plan_details(plan_date=plan_date, include_features=include_features)
     if not plan_details:
         raise HTTPException(status_code=404, detail="No plans found")
     return plan_details
@@ -198,5 +223,9 @@ async def whatif_analysis(
     db: AsyncSession = Depends(get_db)
 ):
     """Perform what-if analysis without persisting"""
-    # TODO: Implement what-if logic
-    return {"diff": {}, "new_summary": {}}
+    planning_service = PlanningService(db)
+    try:
+        scenario = await planning_service.run_what_if(plan_id, whatif_data.dict(exclude_unset=True))
+        return scenario
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

@@ -5,6 +5,7 @@ Main orchestrator for the induction planning system
 import uuid
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional
+from collections import defaultdict, Counter
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 
@@ -18,6 +19,7 @@ from ..models import (
     Alert,
     StablingBay,
     Train,
+    Override,
 )
 
 
@@ -205,6 +207,246 @@ class PlanningService:
             "explanation": feature.explanation,
         }
 
+    async def apply_override(self, plan_id: str, train_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply a manual override to an existing plan item."""
+        plan_uuid = self._parse_plan_id(plan_id)
+        plan = await self.db.get(InductionPlan, plan_uuid)
+        if not plan:
+            raise ValueError(f"Plan {plan_id} not found")
+        if plan.status == "finalized":
+            raise ValueError("Cannot override a finalised plan")
+
+        result = await self.db.execute(
+            select(InductionPlanItem)
+            .where(InductionPlanItem.plan_id == plan_uuid)
+            .where(InductionPlanItem.train_id == train_id)
+            .limit(1)
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            raise ValueError(f"Train {train_id} not found in plan {plan_id}")
+
+        updated_fields: Dict[str, Any] = {}
+
+        decision = payload.get("decision")
+        if decision:
+            decision = str(decision).lower()
+            if decision not in {"active", "standby", "ibl"}:
+                raise ValueError(f"Unsupported decision '{decision}'")
+            if item.decision != decision:
+                item.decision = decision
+                updated_fields["decision"] = decision
+
+        if "bay_id" in payload:
+            bay_value = payload.get("bay_id")
+            bay_uuid = None
+            if bay_value:
+                try:
+                    bay_uuid = uuid.UUID(str(bay_value))
+                except ValueError as exc:
+                    raise ValueError("Invalid bay_id supplied") from exc
+            if item.bay_id != bay_uuid:
+                item.bay_id = bay_uuid
+                updated_fields["bay_id"] = str(bay_uuid) if bay_uuid else None
+
+        if "turnout_rank" in payload and payload["turnout_rank"] is not None:
+            turnout_rank = int(payload["turnout_rank"])
+            if item.turnout_rank != turnout_rank:
+                item.turnout_rank = turnout_rank
+                updated_fields["turnout_rank"] = turnout_rank
+
+        if "notes" in payload:
+            notes = payload.get("notes")
+            if item.notes != notes:
+                item.notes = notes
+                updated_fields["notes"] = notes
+
+        reason = payload.get("reason")
+        if not reason:
+            raise ValueError("Override reason is required")
+
+        explain = item.explain_json or {}
+        explain.setdefault("override", {})
+        explain["override"].update(
+            {
+                "reason": reason,
+                "applied_at": datetime.utcnow().isoformat(),
+            }
+        )
+        item.explain_json = explain
+
+        override_record = Override(
+            plan_id=plan.plan_id,
+            train_id=train_id,
+            reason=reason,
+        )
+        self.db.add(override_record)
+
+        if plan.status == "completed":
+            plan.status = "amended"
+
+        await self.db.commit()
+
+        return {
+            "train_id": train_id,
+            "decision": item.decision,
+            "bay_id": str(item.bay_id) if item.bay_id else None,
+            "turnout_rank": item.turnout_rank,
+            "notes": item.notes,
+            "explanation": item.explain_json,
+            "updated_fields": updated_fields,
+        }
+
+    async def get_item_explanation(self, plan_id: str, train_id: str) -> Optional[Dict[str, Any]]:
+        """Return enriched explanation data for a specific plan item."""
+        plan_uuid = self._parse_plan_id(plan_id)
+        plan = await self.db.get(InductionPlan, plan_uuid)
+        if not plan:
+            return None
+
+        result = await self.db.execute(
+            select(InductionPlanItem, Train)
+            .join(Train, Train.train_id == InductionPlanItem.train_id)
+            .where(InductionPlanItem.plan_id == plan_uuid)
+            .where(InductionPlanItem.train_id == train_id)
+            .limit(1)
+        )
+        row = result.first()
+        if not row:
+            return None
+        item, train = row
+
+        features = await self.feature_service.extract_features(plan.plan_date, [train_id])
+        feature = features.get(train_id)
+
+        feature_payload = None
+        if feature:
+            feature_payload = {
+                "fitness_ok": feature.fit_ok,
+                "fit_expiry_buffer_hours": feature.fit_expiry_buffer_hours,
+                "wo_blocking": feature.wo_blocking,
+                "critical_wo_count": feature.critical_wo_count,
+                "total_wo_count": feature.total_wo_count,
+                "brand_target_h": feature.brand_target_h,
+                "brand_rolling_deficit_h": feature.brand_rolling_deficit_h,
+                "expected_km_if_active": feature.expected_km_if_active,
+                "mileage_dev": feature.mileage_dev,
+                "needs_clean": feature.needs_clean,
+                "clean_type": feature.clean_type,
+                "clean_duration_min": feature.clean_duration_min,
+            }
+
+        return {
+            "plan_id": plan_id,
+            "plan_date": plan.plan_date.isoformat(),
+            "train_id": train_id,
+            "train": {
+                "wrap_id": train.wrap_id,
+                "brand_code": train.brand_code,
+                "status": train.status,
+            },
+            "decision": item.decision,
+            "turnout_rank": item.turnout_rank,
+            "bay_id": str(item.bay_id) if item.bay_id else None,
+            "notes": item.notes,
+            "explanation": item.explain_json or {},
+            "features": feature_payload,
+        }
+
+    async def run_what_if(self, plan_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Run a lightweight what-if scenario without persisting changes."""
+        plan_uuid = self._parse_plan_id(plan_id)
+        plan = await self.db.get(InductionPlan, plan_uuid)
+        if not plan:
+            raise ValueError(f"Plan {plan_id} not found")
+
+        details = await self.get_plan_details(plan_date=plan.plan_date, include_features=True)
+        if not details:
+            raise ValueError("Plan details unavailable")
+
+        base_items = details.get("items", [])
+        base_summary = self._summarize_items(base_items)
+
+        force_directives = self._parse_force(request.get("force"))
+        banned_trains = self._parse_ban(request.get("ban"))
+        weight_deltas = request.get("weight_deltas") or {}
+
+        scenario_items: List[Dict[str, Any]] = []
+        base_lookup = {item["train_id"]: item for item in base_items}
+
+        for item in base_items:
+            scenario_item = dict(item)
+
+            directive = force_directives.get(item["train_id"]) if force_directives else None
+            if directive:
+                decision = directive.get("decision")
+                if decision:
+                    scenario_item["decision"] = decision
+                if "bay_id" in directive:
+                    scenario_item["bay_id"] = directive["bay_id"]
+                if directive.get("turnout_rank") is not None:
+                    scenario_item["turnout_rank"] = directive["turnout_rank"]
+                if directive.get("notes") is not None:
+                    scenario_item["notes"] = directive["notes"]
+                scenario_item.setdefault("annotations", []).append("forced")
+
+            if item["train_id"] in banned_trains:
+                if scenario_item.get("decision") != "standby":
+                    scenario_item["decision"] = "standby"
+                scenario_item.setdefault("annotations", []).append("banned")
+
+            bay_id = scenario_item.get("bay_id")
+            scenario_item["bay_id"] = str(bay_id) if bay_id else None
+            scenario_items.append(scenario_item)
+
+        scenario_summary = self._summarize_items(scenario_items)
+        diff = {key: scenario_summary[key] - base_summary[key] for key in ("active", "standby", "ibl")}
+
+        adjusted_weights = dict(plan.weights_json or {})
+        for key, delta in weight_deltas.items():
+            try:
+                delta_value = float(delta)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid weight delta for '{key}'") from exc
+            adjusted_weights[key] = round(adjusted_weights.get(key, 0.0) + delta_value, 6)
+
+        changes: List[Dict[str, Any]] = []
+        for scenario_item in scenario_items:
+            baseline = base_lookup.get(scenario_item["train_id"])
+            if not baseline:
+                continue
+            delta_payload = {}
+            for field in ("decision", "bay_id", "turnout_rank"):
+                if str(baseline.get(field)) != str(scenario_item.get(field)):
+                    delta_payload[field] = {
+                        "from": baseline.get(field),
+                        "to": scenario_item.get(field),
+                    }
+            if delta_payload:
+                changes.append({
+                    "train_id": scenario_item["train_id"],
+                    "changes": delta_payload,
+                })
+
+        return {
+            "plan_id": plan_id,
+            "plan_date": plan.plan_date.isoformat(),
+            "weights": {
+                "original": plan.weights_json,
+                "adjusted": adjusted_weights,
+                "deltas": weight_deltas,
+            },
+            "summary": {
+                "base": base_summary,
+                "scenario": scenario_summary,
+                "diff": diff,
+            },
+            "forced_trains": sorted(force_directives.keys()) if force_directives else [],
+            "banned_trains": sorted(banned_trains),
+            "changes": changes,
+            "items": scenario_items,
+        }
+
     async def finalize_plan(self, plan_id: str) -> bool:
         """Finalize a completed plan (lock for execution)"""
         plan_uuid = self._parse_plan_id(plan_id)
@@ -249,17 +491,86 @@ class PlanningService:
             .limit(limit)
         )
         plans = result.scalars().all()
+        plan_ids = [plan.plan_id for plan in plans]
+
+        count_map: Dict[uuid.UUID, Dict[str, int]] = defaultdict(lambda: {"active": 0, "standby": 0, "ibl": 0})
+        if plan_ids:
+            counts_result = await self.db.execute(
+                select(InductionPlanItem.plan_id, InductionPlanItem.decision, func.count())
+                .where(InductionPlanItem.plan_id.in_(plan_ids))
+                .group_by(InductionPlanItem.plan_id, InductionPlanItem.decision)
+            )
+            for pid, decision, count in counts_result:
+                count_map[pid][decision] = count
+
         return [
             {
                 "plan_id": str(plan.plan_id),
                 "plan_date": plan.plan_date.isoformat(),
                 "status": plan.status,
-                "active_count": await self._count_items(plan.plan_id, "active"),
-                "standby_count": await self._count_items(plan.plan_id, "standby"),
-                "ibl_count": await self._count_items(plan.plan_id, "ibl"),
+                "active_count": count_map[plan.plan_id]["active"],
+                "standby_count": count_map[plan.plan_id]["standby"],
+                "ibl_count": count_map[plan.plan_id]["ibl"],
             }
             for plan in plans
         ]
+
+    async def list_alerts(
+        self,
+        resolved: Optional[bool] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return alerts filtered by resolution state."""
+        stmt = (
+            select(Alert, InductionPlan.plan_date)
+            .outerjoin(InductionPlan, Alert.plan_id == InductionPlan.plan_id)
+            .order_by(Alert.created_at.desc())
+        )
+        if resolved is not None:
+            stmt = stmt.where(Alert.resolved == resolved)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
+        result = await self.db.execute(stmt)
+        rows = result.all()
+        return [
+            {
+                "alert_id": alert.alert_id,
+                "plan_id": str(alert.plan_id) if alert.plan_id else None,
+                "plan_date": plan_date.isoformat() if plan_date else None,
+                "severity": alert.severity,
+                "message": alert.message,
+                "data": alert.data,
+                "resolved": alert.resolved,
+                "created_at": alert.created_at.isoformat() if alert.created_at else None,
+            }
+            for alert, plan_date in rows
+        ]
+
+    async def resolve_alert(self, alert_id: int) -> Dict[str, Any]:
+        """Mark a specific alert as resolved."""
+        alert = await self.db.get(Alert, alert_id)
+        if not alert:
+            raise ValueError(f"Alert {alert_id} not found")
+
+        alert.resolved = True
+        await self.db.commit()
+
+        plan_date = None
+        if alert.plan_id:
+            plan = await self.db.get(InductionPlan, alert.plan_id)
+            plan_date = plan.plan_date.isoformat() if plan else None
+
+        return {
+            "alert_id": alert.alert_id,
+            "plan_id": str(alert.plan_id) if alert.plan_id else None,
+            "plan_date": plan_date,
+            "severity": alert.severity,
+            "message": alert.message,
+            "data": alert.data,
+            "resolved": alert.resolved,
+            "created_at": alert.created_at.isoformat() if alert.created_at else None,
+        }
 
     async def get_recent_alerts(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Fetch recent alerts across plans"""
@@ -296,9 +607,9 @@ class PlanningService:
             "end": max_date.isoformat() if max_date else None,
         }
 
-    async def get_latest_plan_snapshot(self) -> Optional[Dict[str, Any]]:
-        """Get counts and metadata for the most recent plan"""
-        plan = await self._get_latest_plan_record()
+    async def get_plan_snapshot(self, plan_date: Optional[date] = None) -> Optional[Dict[str, Any]]:
+        """Get counts and metadata for a plan (latest by default)"""
+        plan = await self._get_plan_record(plan_date)
         if not plan:
             return None
 
@@ -320,11 +631,38 @@ class PlanningService:
             },
         }
 
-    async def get_latest_plan_details(self) -> Optional[Dict[str, Any]]:
-        """Return the latest plan with enriched per-train details"""
-        plan = await self._get_latest_plan_record()
+    async def get_plan_details(
+        self,
+        plan_date: Optional[date] = None,
+        include_features: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Return plan details, optionally enriched with feature data"""
+        plan = await self._get_plan_record(plan_date)
         if not plan:
             return None
+
+        counts_result = await self.db.execute(
+            select(InductionPlanItem.decision, func.count())
+            .where(InductionPlanItem.plan_id == plan.plan_id)
+            .group_by(InductionPlanItem.decision)
+        )
+        counts_map = {row[0]: row[1] for row in counts_result.all()}
+
+        summary = {
+            "active": counts_map.get("active", 0),
+            "standby": counts_map.get("standby", 0),
+            "ibl": counts_map.get("ibl", 0),
+            "total": sum(counts_map.values()),
+        }
+
+        if not include_features:
+            return {
+                "plan_id": str(plan.plan_id),
+                "plan_date": plan.plan_date.isoformat(),
+                "status": plan.status,
+                "summary": summary,
+                "items": [],
+            }
 
         rows = await self.db.execute(
             select(InductionPlanItem, Train)
@@ -345,10 +683,8 @@ class PlanningService:
         features = await self.feature_service.extract_features(plan.plan_date)
 
         items: List[Dict[str, Any]] = []
-        counts = {"active": 0, "standby": 0, "ibl": 0}
 
         for item, train in plan_rows:
-            counts[item.decision] = counts.get(item.decision, 0) + 1
             feature = features.get(item.train_id)
 
             priority = "low"
@@ -384,12 +720,7 @@ class PlanningService:
             "plan_id": str(plan.plan_id),
             "plan_date": plan.plan_date.isoformat(),
             "status": plan.status,
-            "summary": {
-                "active": counts.get("active", 0),
-                "standby": counts.get("standby", 0),
-                "ibl": counts.get("ibl", 0),
-                "total": sum(counts.values()),
-            },
+            "summary": summary,
             "items": items,
         }
 
@@ -422,6 +753,14 @@ class PlanningService:
             .where(InductionPlanItem.decision == decision)
         )
         return result.scalar() or 0
+
+    async def _get_plan_record(self, plan_date: Optional[date]) -> Optional[InductionPlan]:
+        if plan_date:
+            result = await self.db.execute(
+                select(InductionPlan).where(InductionPlan.plan_date == plan_date)
+            )
+            return result.scalar_one_or_none()
+        return await self._get_latest_plan_record()
 
     async def _get_latest_plan_record(self) -> Optional[InductionPlan]:
         result = await self.db.execute(

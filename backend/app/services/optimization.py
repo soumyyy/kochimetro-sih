@@ -55,6 +55,7 @@ class OptimizationService:
         self,
         plan: InductionPlan,
         weights: Optional[Dict] = None,
+        persist: bool = True,
     ) -> OptimizationResult:
         """
         Run the complete 3-stage optimization
@@ -99,8 +100,9 @@ class OptimizationService:
             objective_value=assignment_result.get('objective_value', 0)
         )
 
-        # Save to database
-        await self._save_plan_to_database(plan, result, plan_date)
+        if persist:
+            # Save to database
+            await self._save_plan_to_database(plan, result, plan_date)
 
         return result
 
