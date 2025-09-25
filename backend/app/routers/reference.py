@@ -20,6 +20,18 @@ from app.models import (
 )
 from app.services import FeatureExtractionService, BrandingService
 
+
+def _safe_number(value: Optional[float]) -> Optional[float]:
+    """Return a JSON-safe float (None when value is NaN/inf)."""
+    if value is None:
+        return None
+    try:
+        if not isinstance(value, (int, float)):
+            value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if (value == value and abs(value) != float("inf")) else None
+
 router = APIRouter()
 
 
@@ -284,14 +296,14 @@ async def get_trains(
         if feature:
             feature_payload = {
                 "fitness_ok": feature.fit_ok,
-                "fit_expiry_buffer_hours": feature.fit_expiry_buffer_hours,
+                "fit_expiry_buffer_hours": _safe_number(feature.fit_expiry_buffer_hours),
                 "wo_blocking": feature.wo_blocking,
                 "critical_wo_count": feature.critical_wo_count,
                 "total_wo_count": feature.total_wo_count,
-                "brand_target_h": round(feature.brand_target_h, 2),
-                "brand_rolling_deficit_h": round(feature.brand_rolling_deficit_h, 2),
-                "km_cum": round(feature.km_cum, 1),
-                "mileage_dev": round(feature.mileage_dev, 1),
+                "brand_target_h": _safe_number(round(feature.brand_target_h, 2)),
+                "brand_rolling_deficit_h": _safe_number(round(feature.brand_rolling_deficit_h, 2)),
+                "km_cum": _safe_number(round(feature.km_cum, 1)),
+                "mileage_dev": _safe_number(round(feature.mileage_dev, 1)),
                 "needs_clean": feature.needs_clean,
                 "clean_type": feature.clean_type,
                 "explanation": feature.explanation,

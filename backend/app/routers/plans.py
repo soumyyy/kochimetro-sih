@@ -71,7 +71,7 @@ async def create_plan(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/plans/{plan_id}/run", summary="Execute optimization")
+@router.post("/{plan_id}/run", summary="Execute optimization")
 async def run_plan(
     plan_id: str,
     weight_overrides: Optional[Dict[str, float]] = None,
@@ -91,7 +91,7 @@ async def run_plan(
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
-@router.patch("/plans/{plan_id}/items/{train_id}", summary="Manual override")
+@router.patch("/{plan_id}/items/{train_id}", summary="Manual override")
 async def override_plan_item(
     plan_id: str,
     train_id: str,
@@ -112,7 +112,7 @@ async def override_plan_item(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.get("/plans/{plan_id}/explain/{train_id}", summary="Get explanation")
+@router.get("/{plan_id}/explain/{train_id}", summary="Get explanation")
 async def get_explanation(
     plan_id: str,
     train_id: str,
@@ -126,7 +126,7 @@ async def get_explanation(
     return explanation
 
 
-@router.get("/plans/{plan_id}", summary="Get plan details")
+@router.get("/{plan_id}", summary="Get plan details")
 async def get_plan(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -139,7 +139,7 @@ async def get_plan(
     return plan_data
 
 
-@router.get("/plans/{plan_id}/summary", summary="Get plan summary")
+@router.get("/{plan_id}/summary", summary="Get plan summary")
 async def get_plan_summary(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -152,7 +152,7 @@ async def get_plan_summary(
     return summary
 
 
-@router.post("/plans/{plan_id}/finalize", summary="Finalize plan")
+@router.post("/{plan_id}/finalize", summary="Finalize plan")
 async def finalize_plan(
     plan_id: str,
     db: AsyncSession = Depends(get_db)
@@ -216,7 +216,7 @@ async def get_train_features(
     return features
 
 
-@router.post("/plans/{plan_id}/whatif", summary="What-if analysis")
+@router.post("/{plan_id}/whatif", summary="What-if analysis")
 async def whatif_analysis(
     plan_id: str,
     whatif_data: WhatIfRequest,

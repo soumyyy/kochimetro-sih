@@ -125,11 +125,23 @@ class FeatureExtractionService:
         service_start_dt = datetime.combine(plan_date, self.service_start)
         service_end_dt = datetime.combine(plan_date, self.service_end)
 
+        # Normalise certificate timestamps to naive datetimes for comparison
+        def _as_naive(value: datetime) -> datetime:
+            if value.tzinfo is None:
+                return value
+            return value.replace(tzinfo=None)
+
+        service_start_dt = service_start_dt.replace(tzinfo=None)
+        service_end_dt = service_end_dt.replace(tzinfo=None)
+
         min_expiry_buffer = float("inf")
         all_valid = True
 
         for cert in certificates:
-            if cert.valid_from <= service_start_dt and cert.valid_to >= service_end_dt:
+            valid_from = _as_naive(cert.valid_from)
+            valid_to = _as_naive(cert.valid_to)
+
+            if valid_from <= service_start_dt and valid_to >= service_end_dt:
                 buffer_hours = (cert.valid_to - service_end_dt).total_seconds() / 3600
                 min_expiry_buffer = min(min_expiry_buffer, max(0, buffer_hours))
             else:

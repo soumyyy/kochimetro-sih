@@ -23,6 +23,18 @@ from ..models import (
 )
 
 
+def _safe_number(value: Optional[float]) -> Optional[float]:
+    """Return a JSON-safe float (None when value is NaN/inf)."""
+    if value is None:
+        return None
+    try:
+        if not isinstance(value, (int, float)):
+            value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if (value == value and abs(value) != float("inf")) else None
+
+
 class PlanningService:
     """Main service for orchestrating the planning system"""
 
@@ -323,17 +335,17 @@ class PlanningService:
         if feature:
             feature_payload = {
                 "fitness_ok": feature.fit_ok,
-                "fit_expiry_buffer_hours": feature.fit_expiry_buffer_hours,
+                "fit_expiry_buffer_hours": _safe_number(feature.fit_expiry_buffer_hours),
                 "wo_blocking": feature.wo_blocking,
                 "critical_wo_count": feature.critical_wo_count,
                 "total_wo_count": feature.total_wo_count,
-                "brand_target_h": feature.brand_target_h,
-                "brand_rolling_deficit_h": feature.brand_rolling_deficit_h,
-                "expected_km_if_active": feature.expected_km_if_active,
-                "mileage_dev": feature.mileage_dev,
+                "brand_target_h": _safe_number(feature.brand_target_h),
+                "brand_rolling_deficit_h": _safe_number(feature.brand_rolling_deficit_h),
+                "expected_km_if_active": _safe_number(feature.expected_km_if_active),
+                "mileage_dev": _safe_number(feature.mileage_dev),
                 "needs_clean": feature.needs_clean,
                 "clean_type": feature.clean_type,
-                "clean_duration_min": feature.clean_duration_min,
+                "clean_duration_min": _safe_number(feature.clean_duration_min),
             }
 
         return {
@@ -753,6 +765,48 @@ class PlanningService:
             .where(InductionPlanItem.decision == decision)
         )
         return result.scalar() or 0
+
+    @staticmethod
+    def _summarize_items(items: List[Dict[str, Any]]) -> Dict[str, int]:
+        counts = Counter(item.get("decision", "unknown") for item in items)
+        return {
+            "active": counts.get("active", 0),
+            "standby": counts.get("standby", 0),
+            "ibl": counts.get("ibl", 0),
+            "total": len(items),
+        }
+
+    @staticmethod
+    def _parse_force(force_payload: Optional[Any]) -> Dict[str, Dict[str, Any]]:
+        directives: Dict[str, Dict[str, Any]] = {}
+        if not force_payload:
+            return directives
+        if isinstance(force_payload, dict):
+            for train_id, directive in force_payload.items():
+                if isinstance(directive, dict):
+                    entry = {
+                        key: directive.get(key)
+                        for key in ("decision", "bay_id", "turnout_rank", "notes")
+                        if key in directive
+                    }
+                else:
+                    entry = {"decision": directive}
+
+                decision = entry.get("decision")
+                if decision is not None:
+                    entry["decision"] = str(decision).lower()
+                directives[str(train_id)] = entry
+        return directives
+
+    @staticmethod
+    def _parse_ban(ban_payload: Optional[Any]) -> set:
+        if not ban_payload:
+            return set()
+        if isinstance(ban_payload, (list, set, tuple)):
+            return {str(item) for item in ban_payload}
+        if isinstance(ban_payload, dict):
+            return {str(train_id) for train_id, flag in ban_payload.items() if flag}
+        return {str(ban_payload)}
 
     async def _get_plan_record(self, plan_date: Optional[date]) -> Optional[InductionPlan]:
         if plan_date:
