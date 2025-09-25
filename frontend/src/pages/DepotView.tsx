@@ -11,6 +11,7 @@ import {
   CheckCircle,
   Warehouse
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -69,8 +70,14 @@ interface OccupancySlice {
   duration_hours: number
 }
 
-const fetchDepotInfo = async (): Promise<DepotSummaryResponse> => {
-  const { data } = await axios.get(`${API_BASE_URL}/api/v1/ref/depot`)
+const fetchDepotInfo = async (planDate: string | null): Promise<DepotSummaryResponse> => {
+  const params: Record<string, string | boolean> = {}
+  if (planDate) {
+    params.plan_date = planDate
+  }
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/ref/depot`, {
+    params,
+  })
   return data
 }
 
@@ -102,7 +109,12 @@ const statusBadgeClass = (status: 'occupied' | 'available' | 'inactive'): string
 }
 
 export default function DepotView() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['depot-info'], queryFn: fetchDepotInfo })
+  const { planDate } = usePlanDate()
+  const selectionKey = planDate ?? 'latest'
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['depot-info', selectionKey],
+    queryFn: () => fetchDepotInfo(planDate),
+  })
 
   const depots = data?.depots ?? []
   const bays = useMemo(

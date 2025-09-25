@@ -17,6 +17,7 @@ import {
   ClipboardList,
   Target,
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -99,8 +100,14 @@ interface PlanItem {
   clean_type?: string | null
 }
 
-const fetchDashboardSummary = async (): Promise<DashboardSummaryResponse> => {
-  const { data } = await axios.get(`${API_BASE_URL}/api/v1/dashboard/summary`)
+const fetchDashboardSummary = async (planDate: string | null): Promise<DashboardSummaryResponse> => {
+  const params: Record<string, string | boolean> = {}
+  if (planDate) {
+    params.plan_date = planDate
+  }
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/dashboard/summary`, {
+    params,
+  })
   return data
 }
 
@@ -117,9 +124,11 @@ const titleCase = (value: string): string =>
   value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value
 
 export default function Dashboard() {
+  const { planDate } = usePlanDate()
+  const selectionKey = planDate ?? 'latest'
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-summary'],
-    queryFn: fetchDashboardSummary,
+    queryKey: ['dashboard-summary', selectionKey],
+    queryFn: () => fetchDashboardSummary(planDate),
   })
 
   const latestCounts = data?.latest_plan?.counts ?? { active: 0, standby: 0, ibl: 0 }

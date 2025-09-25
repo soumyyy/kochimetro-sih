@@ -14,6 +14,7 @@ import {
   Play,
   Settings,
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -46,8 +47,14 @@ interface PlanItem {
   clean_type?: string | null
 }
 
-const fetchLatestPlan = async (): Promise<PlanBoardResponse> => {
-  const { data } = await axios.get(`${API_BASE_URL}/api/v1/plans/latest`)
+const fetchLatestPlan = async (planDate: string | null): Promise<PlanBoardResponse> => {
+  const params: Record<string, string | boolean> = {}
+  if (planDate) {
+    params.plan_date = planDate
+  }
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/plans/latest`, {
+    params,
+  })
   return data
 }
 
@@ -67,7 +74,12 @@ const formatPlanDate = (iso?: string): string =>
   iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
 
 export default function PlanBoard() {
-  const { data, isLoading } = useQuery({ queryKey: ['latest-plan'], queryFn: fetchLatestPlan })
+  const { planDate } = usePlanDate()
+  const selectionKey = planDate ?? 'latest'
+  const { data, isLoading } = useQuery({
+    queryKey: ['latest-plan', selectionKey],
+    queryFn: () => fetchLatestPlan(planDate),
+  })
 
   const items = data?.items ?? []
 
@@ -119,7 +131,7 @@ export default function PlanBoard() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-white">Plan board</h1>
             <p className="mt-2 text-sm text-white/70">
-              Latest plan for <span className="font-medium text-white">{planDateLabel}</span>
+              Plan for <span className="font-medium text-white">{planDateLabel}</span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">

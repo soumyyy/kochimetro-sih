@@ -1,5 +1,5 @@
 
-import type { ReactNode } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
@@ -11,6 +11,8 @@ import {
   Sparkles,
   Clock
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
+import { Badge } from './ui/badge'
 
 interface LayoutProps {
   children: ReactNode
@@ -30,6 +32,7 @@ interface PlanWindowMeta {
   windowLabel: string
   lastRefresh: string
   datasetRange: string
+  planDate: string | null
 }
 
 interface PlanRangeResponse {
@@ -45,13 +48,18 @@ interface DashboardMetaResponse {
   data_window: PlanRangeResponse | null
 }
 
-const fetchPlanWindowMeta = async (): Promise<PlanWindowMeta> => {
+const fetchPlanWindowMeta = async (planDate: string | null): Promise<PlanWindowMeta> => {
   try {
+    const params: Record<string, string | boolean> = { include_details: false }
+    if (planDate) {
+      params.plan_date = planDate
+    }
+
     const { data } = await axios.get<DashboardMetaResponse>(`${API_BASE_URL}/api/v1/dashboard/summary`, {
-      params: { include_details: false }
+      params,
     })
 
-    const planDate = data.latest_plan?.plan_date
+    const planDateResponse = data.latest_plan?.plan_date
     const range = data.data_window ?? {}
     const start = range.start ? new Date(range.start) : null
     const end = range.end ? new Date(range.end) : null
@@ -67,30 +75,62 @@ const fetchPlanWindowMeta = async (): Promise<PlanWindowMeta> => {
       : 'Seed data range'
 
     return {
-      windowLabel: planDate ? `Plan for ${dateFormatter.format(new Date(planDate))}` : 'Latest plan snapshot',
+      windowLabel: planDateResponse ? `Plan for ${dateFormatter.format(new Date(planDateResponse))}` : 'Latest plan snapshot',
       lastRefresh: new Date().toLocaleString(),
       datasetRange,
+      planDate: planDateResponse ?? null,
     }
   } catch (error) {
     return {
       windowLabel: 'Latest plan snapshot',
       lastRefresh: new Date().toLocaleString(),
       datasetRange: 'Seed data range',
+      planDate: null,
     }
   }
 }
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
+  const { planDate, setPlanDate, options, isLoadingOptions, latestPlanDate } = usePlanDate()
+  const selectionKey = planDate ?? 'latest'
   const { data: planMeta } = useQuery({
-    queryKey: ['layout-plan-meta'],
-    queryFn: fetchPlanWindowMeta,
+    queryKey: ['layout-plan-meta', selectionKey],
+    queryFn: () => fetchPlanWindowMeta(planDate),
     staleTime: 60 * 1000,
   })
 
   const windowLabel = planMeta?.windowLabel ?? 'Latest plan snapshot'
   const lastRefresh = planMeta?.lastRefresh ?? new Date().toLocaleString()
   const datasetRange = planMeta?.datasetRange ?? 'Seed data range'
+  const effectivePlanDate = planMeta?.planDate ?? latestPlanDate
+
+  const handlePlanDateChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const next = event.target.value
+    if (next === '__custom') {
+      return
+    }
+    setPlanDate(next ? next : null)
+  }
+
+  const handlePlanDateInput = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value
+    setPlanDate(next ? next : null)
+  }
+
+  const clearPlanDate = () => setPlanDate(null)
+
+  const formattedSelectedDate = effectivePlanDate
+    ? new Date(effectivePlanDate).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null
+
+  const minPlanDate = options.length ? options[options.length - 1].value : undefined
+  const maxPlanDate = latestPlanDate ?? options[0]?.value
+  const isCustomDate = planDate !== null && !options.some((option) => option.value === planDate)
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -101,23 +141,61 @@ export default function Layout({ children }: LayoutProps) {
       <div className="absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-white/10" aria-hidden="true" />
 
       <div className="relative z-10 flex min-h-screen flex-col px-4 pt-8 pb-36 sm:px-6 lg:px-12">
-        <header className="mx-auto w-full max-w-6xl rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
-          <div className="flex flex_wrap items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
-                <Sparkles className="h-4 w-4 text-sky-200" />
-                Plan window
+        <header className="mx-auto w-full max-w-6xl rounded-3xl border border-white/12 bg-white/10 px-5 py-5 shadow-[0_24px_65px_-36px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/12">
+                <Sparkles className="h-5 w-5 text-sky-200" />
               </div>
-              <p className="text-xl font-semibold text-white sm:text-2xl">{windowLabel}</p>
-              <p className="text-sm text-white/70">{datasetRange}</p>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/15 px-4 py-3 backdrop-blur-xl">
-              <Clock className="h-4 w-4 text-sky-200" />
-              <div className="leading-tight">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">Last sync</p>
-                <p className="text-sm font-semibold text-white">{lastRefresh}</p>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/60">Plan window</p>
+                <p className="text-base font-semibold text-white">{windowLabel}</p>
+                <p className="text-xs text-white/65">
+                  {formattedSelectedDate ? `Selected ${formattedSelectedDate}` : 'Latest available plan'} · {datasetRange}
+                </p>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
+                <Clock className="h-3.5 w-3.5 text-sky-200" />
+                Last sync {lastRefresh}
+              </Badge>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="h-10 min-w-[200px] rounded-2xl border border-white/30 bg-white/85 px-3 text-sm font-semibold text-slate-900 shadow-sm transition focus:border-sky-400/70 focus:outline-none"
+                onChange={handlePlanDateChange}
+                value={isCustomDate ? '__custom' : planDate ?? ''}
+                disabled={isLoadingOptions}
+              >
+                <option value="">Latest plan</option>
+                {options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+                {planDate && isCustomDate && (
+                  <option value="__custom">Custom date</option>
+                )}
+              </select>
+              <input
+                type="date"
+                className="h-10 rounded-2xl border border-white/30 bg-white/85 px-3 text-sm font-semibold text-slate-900 shadow-sm transition focus:border-sky-400/70 focus:outline-none"
+                value={planDate ?? ''}
+                onChange={handlePlanDateInput}
+                min={minPlanDate}
+                max={maxPlanDate}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={clearPlanDate}
+              className="inline-flex h-10 items-center rounded-2xl border border-white/15 bg-white/10 px-3 text-sm font-medium text-white/80 transition hover:bg-white/20"
+            >
+              Use latest
+            </button>
           </div>
         </header>
 

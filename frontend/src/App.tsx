@@ -6,6 +6,7 @@ import IBLGantt from './pages/IBLGantt'
 import DepotView from './pages/DepotView'
 import SponsorDash from './pages/SponsorDash'
 import { Toaster } from './components/ui/sonner'
+import { PlanDateProvider } from './context/PlanDateContext'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,16 +20,18 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="app-shell min-h-screen">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/planboard" element={<PlanBoard />} />
-            <Route path="/ibl-gantt" element={<IBLGantt />} />
-            <Route path="/depot" element={<DepotView />} />
-            <Route path="/sponsors" element={<SponsorDash />} />
-          </Routes>
-          <Toaster />
-        </div>
+        <PlanDateProvider>
+          <div className="app-shell min-h-screen">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/planboard" element={<PlanBoard />} />
+              <Route path="/ibl-gantt" element={<IBLGantt />} />
+              <Route path="/depot" element={<DepotView />} />
+              <Route path="/sponsors" element={<SponsorDash />} />
+            </Routes>
+            <Toaster />
+          </div>
+        </PlanDateProvider>
       </Router>
     </QueryClientProvider>
   )

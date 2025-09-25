@@ -12,6 +12,7 @@ import {
   CalendarRange,
   Users
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -58,8 +59,14 @@ interface CampaignSummary {
   rolling_window_days: number
 }
 
-const fetchBrandingRollup = async (): Promise<BrandingRollup> => {
-  const { data } = await axios.get(`${API_BASE_URL}/api/v1/ref/sponsors`)
+const fetchBrandingRollup = async (planDate: string | null): Promise<BrandingRollup> => {
+  const params: Record<string, string | number> = {}
+  if (planDate) {
+    params.rollup_date = planDate
+  }
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/ref/sponsors`, {
+    params,
+  })
   return data
 }
 
@@ -97,7 +104,12 @@ const getStatusColor = (status: CampaignSummary['status']) => {
 }
 
 export default function SponsorDash() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['branding-rollup'], queryFn: fetchBrandingRollup })
+  const { planDate } = usePlanDate()
+  const selectionKey = planDate ?? 'latest'
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['branding-rollup', selectionKey],
+    queryFn: () => fetchBrandingRollup(planDate),
+  })
 
   const sponsors = data?.sponsors ?? []
   const campaigns = data?.campaigns ?? []

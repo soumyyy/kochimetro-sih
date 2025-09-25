@@ -10,10 +10,11 @@ import {
   MapPin,
   TrainFront
 } from 'lucide-react'
+import { usePlanDate } from '../context/PlanDateContext'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const SLOT_WIDTH_REM = 4
-const SLOTS_PER_WINDOW = 18
+const DEFAULT_SLOTS_PER_WINDOW = 18
 const SLOT_MINUTES = 30
 const LEFT_COLUMN_WIDTH_REM = 16
 
@@ -67,10 +68,15 @@ interface DepotReferenceResponse {
   }>
 }
 
-const fetchLatestPlanMeta = async (): Promise<LatestPlanMeta | null> => {
+const fetchLatestPlanMeta = async (planDate: string | null): Promise<LatestPlanMeta | null> => {
   try {
+    const params: Record<string, string | boolean> = { include_features: false }
+    if (planDate) {
+      params.plan_date = planDate
+    }
+
     const { data } = await axios.get(`${API_BASE_URL}/api/v1/plans/latest`, {
-      params: { include_features: false },
+      params,
     })
     return {
       plan_id: data.plan_id,
@@ -90,9 +96,13 @@ const fetchPlanDetails = async (planId: string): Promise<PlanDetailsResponse> =>
   return data
 }
 
-const fetchDepotReference = async (): Promise<DepotReferenceResponse> => {
+const fetchDepotReference = async (planDate: string | null): Promise<DepotReferenceResponse> => {
+  const params: Record<string, string | boolean> = { include_occupancy: false }
+  if (planDate) {
+    params.plan_date = planDate
+  }
   const { data } = await axios.get(`${API_BASE_URL}/api/v1/reference/depot`, {
-    params: { include_occupancy: false },
+    params,
   })
   return data
 }
@@ -183,11 +193,16 @@ const getPriorityVariant = (priority?: string): JobPalette['badgeVariant'] => {
 }
 
 export default function IBLGantt() {
+  const { planDate } = usePlanDate()
+  const planKey = planDate ?? 'latest'
   const {
     data: planMeta,
     isLoading: metaLoading,
     error: metaError,
-  } = useQuery({ queryKey: ['latest-plan-meta'], queryFn: fetchLatestPlanMeta })
+  } = useQuery({
+    queryKey: ['latest-plan-meta', planKey],
+    queryFn: () => fetchLatestPlanMeta(planDate),
+  })
 
   const planId = planMeta?.plan_id
 
@@ -196,14 +211,14 @@ export default function IBLGantt() {
     isLoading: detailsLoading,
     error: detailsError,
   } = useQuery({
-    queryKey: ['plan-details', planId],
+    queryKey: ['plan-details', planId ?? 'pending'],
     queryFn: () => fetchPlanDetails(planId!),
     enabled: Boolean(planId),
   })
 
   const { data: depotMeta } = useQuery({
-    queryKey: ['depot-reference'],
-    queryFn: fetchDepotReference,
+    queryKey: ['depot-reference', planKey],
+    queryFn: () => fetchDepotReference(planDate),
   })
 
   const isLoading = metaLoading || (Boolean(planId) && detailsLoading)
@@ -212,26 +227,69 @@ export default function IBLGantt() {
   const planDateIso = planDetails?.plan_date ?? planMeta?.plan_date ?? null
   const planStatus = planDetails?.status ?? planMeta?.status ?? 'unknown'
 
-  const windowStart = useMemo(() => {
-    if (planDateIso) {
-      return new Date(`${planDateIso}T21:00:00`)
+  const { windowStart, slotCount } = useMemo(() => {
+    const defaultStart = planDateIso ? new Date(`${planDateIso}T21:00:00`) : null
+    const defaultMinutes = DEFAULT_SLOTS_PER_WINDOW * SLOT_MINUTES
+    const defaultEnd = defaultStart ? new Date(defaultStart.getTime() + defaultMinutes * 60 * 1000) : null
+
+    const slots = planDetails?.ibl_gantt ?? []
+    if (!slots.length) {
+      return {
+        windowStart: defaultStart,
+        slotCount: DEFAULT_SLOTS_PER_WINDOW,
+      }
     }
-    const firstSlot = planDetails?.ibl_gantt?.[0]
-    if (firstSlot) {
-      const start = new Date(firstSlot.from_ts)
-      start.setHours(21, 0, 0, 0)
-      return start
+
+    let earliest = Number.POSITIVE_INFINITY
+    let latest = Number.NEGATIVE_INFINITY
+
+    slots.forEach((slot) => {
+      const start = new Date(slot.from_ts).getTime()
+      const end = new Date(slot.to_ts).getTime()
+      if (!Number.isNaN(start)) {
+        earliest = Math.min(earliest, start)
+      }
+      if (!Number.isNaN(end)) {
+        latest = Math.max(latest, end)
+      }
+    })
+
+    if (!Number.isFinite(earliest) || !Number.isFinite(latest)) {
+      return {
+        windowStart: defaultStart,
+        slotCount: DEFAULT_SLOTS_PER_WINDOW,
+      }
     }
-    return null
+
+    const start = new Date(earliest)
+    start.setMinutes(Math.floor(start.getMinutes() / SLOT_MINUTES) * SLOT_MINUTES, 0, 0)
+
+    const end = new Date(latest)
+    end.setMinutes(Math.ceil(end.getMinutes() / SLOT_MINUTES) * SLOT_MINUTES, 0, 0)
+
+    if (defaultStart && start > defaultStart) {
+      start.setTime(defaultStart.getTime())
+    }
+    if (defaultEnd && end < defaultEnd) {
+      end.setTime(defaultEnd.getTime())
+    }
+
+    const totalMinutes = Math.max((end.getTime() - start.getTime()) / (60 * 1000), SLOT_MINUTES)
+    const computedSlots = Math.ceil(totalMinutes / SLOT_MINUTES)
+
+    return {
+      windowStart: start,
+      slotCount: Math.max(computedSlots, DEFAULT_SLOTS_PER_WINDOW),
+    }
   }, [planDateIso, planDetails?.ibl_gantt])
 
   const timeSlots = useMemo(() => {
-    if (!windowStart) return []
-    return Array.from({ length: SLOTS_PER_WINDOW }, (_, idx) => {
+    if (!windowStart || !slotCount) return []
+    return Array.from({ length: slotCount }, (_, idx) => {
       const slotTime = new Date(windowStart.getTime() + idx * SLOT_MINUTES * 60 * 1000)
       return formatTime(slotTime)
     })
-  }, [windowStart])
+  }, [windowStart, slotCount])
 
   const jobs: GanttJob[] = useMemo(() => {
     if (!windowStart || !planDetails?.ibl_gantt?.length) {
@@ -482,7 +540,7 @@ export default function IBLGantt() {
                           </div>
                           <div
                             className="relative flex-1"
-                            style={{ minWidth: `${Math.max(timeSlots.length, SLOTS_PER_WINDOW) * SLOT_WIDTH_REM}rem` }}
+                            style={{ minWidth: `${(timeSlots.length || DEFAULT_SLOTS_PER_WINDOW) * SLOT_WIDTH_REM}rem` }}
                           >
                             <div className="pointer-events-none absolute inset-0 flex">
                               {timeSlots.map((_, idx) => (
