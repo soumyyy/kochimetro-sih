@@ -91,13 +91,13 @@ const bayStatus = (bay: BayInfo): 'occupied' | 'available' | 'inactive' => {
 const statusBadgeClass = (status: 'occupied' | 'available' | 'inactive'): string => {
   switch (status) {
     case 'occupied':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      return 'border border-emerald-300/50 bg-emerald-400/20 text-emerald-100'
     case 'available':
-      return 'bg-slate-100 text-slate-700 border-slate-200'
+      return 'border border-white/20 bg-white/10 text-white/80'
     case 'inactive':
-      return 'bg-amber-100 text-amber-800 border-amber-200'
+      return 'border border-amber-300/40 bg-amber-400/20 text-amber-100'
     default:
-      return 'bg-slate-100 text-slate-700 border-slate-200'
+      return 'border border-white/20 bg-white/10 text-white/80'
   }
 }
 
@@ -131,7 +131,7 @@ export default function DepotView() {
   if (error) {
     return (
       <Layout>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-800">
+        <div className="rounded-3xl border border-rose-300/40 bg-rose-500/20 p-6 text-sm text-rose-100 backdrop-blur-xl">
           Failed to load depot data. Please refresh once the API is reachable.
         </div>
       </Layout>
@@ -141,16 +141,16 @@ export default function DepotView() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="space-y-6">
-          <div className="h-8 w-48 rounded bg-slate-200 animate-pulse" />
+        <div className="space-y-10 text-white">
+          <div className="h-10 w-48 rounded-full bg-white/10 animate-pulse" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
+              <div key={idx} className="h-24 rounded-3xl bg-white/10 animate-pulse" />
             ))}
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="h-[420px] rounded-2xl bg-slate-100 animate-pulse" />
-            <div className="h-[420px] rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-[420px] rounded-3xl bg-white/10 animate-pulse" />
+            <div className="h-[420px] rounded-3xl bg-white/10 animate-pulse" />
           </div>
         </div>
       </Layout>
@@ -160,7 +160,7 @@ export default function DepotView() {
   if (!data) {
     return (
       <Layout>
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
+        <div className="rounded-3xl border border-white/15 bg-white/10 p-8 text-sm text-white/70 backdrop-blur-xl">
           No depot information available. Seed the database and try again.
         </div>
       </Layout>
@@ -169,17 +169,17 @@ export default function DepotView() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-10 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Depot View</h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Depot View</h1>
+            <p className="mt-2 text-sm text-white/70">
               Stabling and turnout overview · Plan date {formatDate(data.summary.plan_date)}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Badge variant="info">Assignments {data.summary.assignments_available ? 'available' : 'pending'}</Badge>
-            <Badge variant="outline">Depots: {depots.length}</Badge>
+            <Badge variant="secondary">Depots: {depots.length}</Badge>
           </div>
         </div>
 
@@ -188,32 +188,32 @@ export default function DepotView() {
             label="Occupied bays"
             value={occupiedBays}
             icon={MapPin}
-            accent="text-emerald-600"
+            accent="text-emerald-200"
           />
           <SummaryCard
             label="Available bays"
             value={availableBays}
             icon={CheckCircle}
-            accent="text-blue-600"
+            accent="text-sky-200"
           />
           <SummaryCard
             label="Inactive bays"
             value={inactiveBays}
             icon={AlertTriangle}
-            accent="text-amber-600"
+            accent="text-amber-200"
           />
           <SummaryCard
             label="Total bays"
             value={bays.length}
             icon={Warehouse}
-            accent="text-slate-700"
+            accent="text-white"
           />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
+          <Card className="border-white/12 bg-white/8">
             <CardHeader>
-              <CardTitle>Bay status</CardTitle>
+              <CardTitle className="text-white">Bay status</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -222,33 +222,33 @@ export default function DepotView() {
                   return (
                     <div
                       key={bay.bay_id}
-                      className={`flex items-center justify-between rounded-xl border px-4 py-3 ${statusBadgeClass(status)}`}
+                      className={`flex items-center justify-between rounded-xl px-4 py-3 ${statusBadgeClass(status)}`}
                     >
                       <div>
-                        <div className="text-sm font-semibold text-slate-900">{bay.bay_id}</div>
-                        <div className="text-xs text-slate-600">
+                        <div className="text-sm font-semibold text-white">{bay.bay_id}</div>
+                        <div className="text-xs text-white/70">
                           Position {bay.position_idx} · {bay.electrified ? 'Electrified' : 'Non-electrified'} ·
                           Access {bay.access_time_min} min
                         </div>
                         {bay.plan_assignments.length > 0 && (
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-white/60">
                             Planned: {bay.plan_assignments.map((assignment) => assignment.train_id).join(', ')}
                           </div>
                         )}
                       </div>
-                      <div className="text-right text-xs text-slate-600">
+                      <div className="text-right text-xs text-white/70">
                         {bay.current_train ? (
                           <div>
-                            <span className="font-medium text-slate-800">{bay.current_train}</span>
-                            <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                            <span className="font-medium text-white">{bay.current_train}</span>
+                            <div className="text-[11px] uppercase tracking-wide text-white/60">
                               {bay.current_train_status ?? 'unknown'}
                             </div>
                           </div>
                         ) : (
-                          <div className="text-slate-500">No train assigned</div>
+                          <div className="text-white/50">No train assigned</div>
                         )}
                         {bay.next_turnout_rank !== null && (
-                          <div className="text-[11px] text-slate-500">Turnout #{bay.next_turnout_rank}</div>
+                          <div className="text-[11px] text-white/60">Turnout #{bay.next_turnout_rank}</div>
                         )}
                       </div>
                     </div>
@@ -258,16 +258,16 @@ export default function DepotView() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-white/12 bg-white/8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <Navigation className="h-5 w-5" />
                 Turnout schedule
               </CardTitle>
             </CardHeader>
             <CardContent>
               {turnoutSchedule.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                <div className="rounded-xl border border-dashed border-white/25 bg-white/5 p-10 text-center text-sm text-white/60">
                   No turnout order available for this plan.
                 </div>
               ) : (
@@ -275,10 +275,10 @@ export default function DepotView() {
                   {turnoutSchedule.map((item) => (
                     <div
                       key={`${item.train_id}-${item.turnout_rank}`}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm"
+                      className="flex items-center justify-between rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/80"
                     >
-                      <div className="font-medium text-slate-800">{item.train_id}</div>
-                      <div className="text-xs text-slate-500">Bay {item.bay_id}</div>
+                      <div className="font-medium text-white">{item.train_id}</div>
+                      <div className="text-xs text-white/60">Bay {item.bay_id}</div>
                       <Badge variant="secondary">#{item.turnout_rank}</Badge>
                     </div>
                   ))}
@@ -304,14 +304,14 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+    <Card className="border-white/12 bg-white/8">
       <CardContent className="flex items-center gap-3 p-4">
-        <div className="rounded-xl bg-slate-100 p-2">
+        <div className="rounded-xl bg-white/15 p-2">
           <Icon className={`h-5 w-5 ${accent}`} />
         </div>
         <div>
-          <div className="text-xl font-semibold text-slate-900">{value}</div>
-          <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+          <div className="text-xl font-semibold text-white">{value}</div>
+          <div className="text-xs uppercase tracking-wide text-white/60">{label}</div>
         </div>
       </CardContent>
     </Card>

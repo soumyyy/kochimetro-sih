@@ -218,16 +218,16 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="space-y-8">
-          <div className="h-40 rounded-3xl bg-slate-100 animate-pulse" />
+        <div className="space-y-10 text-white">
+          <div className="h-44 rounded-3xl bg-white/10 animate-pulse" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="h-32 rounded-2xl bg-slate-100 animate-pulse" />
+              <div key={idx} className="h-28 rounded-3xl bg-white/10 animate-pulse" />
             ))}
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="h-56 rounded-2xl bg-slate-100 animate-pulse" />
-            <div className="h-56 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-60 rounded-3xl bg-white/10 animate-pulse" />
+            <div className="h-60 rounded-3xl bg-white/10 animate-pulse" />
           </div>
         </div>
       </Layout>
@@ -236,53 +236,52 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="space-y-8">
-        <Card className="rounded-3xl border border-slate-200/60 bg-white/80 shadow-xl backdrop-blur">
-          <CardContent className="px-6 py-8 sm:px-10 sm:py-9">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-xl space-y-4">
-                <Badge variant="info" className="uppercase tracking-wide text-[11px]">Synthetic dataset</Badge>
-                <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-                  Fleet snapshot and plan readiness for tonight&apos;s induction run
+      <div className="space-y-10 text-white">
+        <Card className="border-white/15 bg-white/10">
+          <CardContent className="px-6 py-8 sm:px-10">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-xl space-y-5">
+                <Badge variant="info" className="uppercase tracking-[0.3em] text-[11px] text-white">Live dataset</Badge>
+                <h1 className="text-3xl font-semibold leading-snug text-white">
+                  Fleet snapshot and readiness for tonight&apos;s induction window
                 </h1>
-                <p className="text-sm leading-relaxed text-slate-600">
-                  Monitor active capacity, IBL pressure, and sponsorship exposure derived from the
-                  seeded Supabase dataset. Use the quick links to adjust assignments or inspect the
-                  overnight cleaning window.
+                <p className="text-sm leading-relaxed text-white/70">
+                  Monitor capacity, IBL pressure, and sponsorship exposure. Jump into the plan board to adjust
+                  assignments or inspect the overnight cleaning run.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Link
                     to="/planboard"
-                    className="inline-flex items-center rounded-full bg-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-[0_18px_35px_-20px_rgba(37,99,235,0.75)] transition hover:bg-blue-700"
+                    className="inline-flex items-center rounded-full bg-sky-500/90 px-4 py-2 text-sm font-semibold text-white shadow-[0_20px_45px_-25px_rgba(14,165,233,0.7)] transition hover:bg-sky-400/90"
                   >
                     Open plan board
                   </Link>
                   <Link
                     to="/ibl-gantt"
-                    className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100/80 px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                    className="inline-flex items-center rounded-full border border-white/25 bg-white/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/25"
                   >
                     Review IBL schedule
                   </Link>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-slate-600">
+              <div className="grid grid-cols-2 gap-4 text-sm text-white/70">
                 <div>
-                  <p className="uppercase tracking-[0.18em] text-[11px] text-slate-500">Plan date</p>
-                  <p className="mt-1 font-semibold text-slate-800">{formatDate(data?.plan_details?.plan_date)}</p>
+                  <p className="uppercase tracking-[0.3em] text-[10px] text-white/50">Plan date</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{formatDate(data?.plan_details?.plan_date)}</p>
                 </div>
                 <div>
-                  <p className="uppercase tracking-[0.18em] text-[11px] text-slate-500">Dataset range</p>
-                  <p className="mt-1 font-semibold text-slate-800">
-                    {startDate && endDate ? `${formatDate(dateRange?.start)} – ${formatDate(dateRange?.end)}` : 'Seed required'}
+                  <p className="uppercase tracking-[0.3em] text-[10px] text-white/50">Data window</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {startDate && endDate ? `${formatDate(dateRange?.start)} — ${formatDate(dateRange?.end)}` : 'Seed required'}
                   </p>
                 </div>
                 <div>
-                  <p className="uppercase tracking-[0.18em] text-[11px] text-slate-500">Plan window</p>
-                  <p className="mt-1 font-semibold text-slate-800">21:00 – 05:30 IST</p>
+                  <p className="uppercase tracking-[0.3em] text-[10px] text-white/50">Plan window</p>
+                  <p className="mt-1 text-lg font-semibold text-white">21:00 – 05:30 IST</p>
                 </div>
                 <div>
-                  <p className="uppercase tracking-[0.18em] text-[11px] text-slate-500">Last refresh</p>
-                  <p className="mt-1 font-semibold text-slate-800">Auto-refresh on request</p>
+                  <p className="uppercase tracking-[0.3em] text-[10px] text-white/50">Last refresh</p>
+                  <p className="mt-1 text-lg font-semibold text-white">Auto-sync on demand</p>
                 </div>
               </div>
             </div>
@@ -291,28 +290,23 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <Card
-              key={stat.name}
-              className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur"
-            >
+            <Card key={stat.name} className="border-white/10 bg-white/8">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  {stat.name}
-                </CardTitle>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                  <stat.icon className="h-4 w-4" />
+                <CardTitle className="text-sm font-medium text-white/70">{stat.name}</CardTitle>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white">
+                  <stat.icon className="h-5 w-5" />
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2 p-6 pt-0">
-                <div className="text-3xl font-semibold text-slate-900">{stat.value}</div>
+              <CardContent className="space-y-2">
+                <div className="text-3xl font-semibold text-white">{stat.value}</div>
                 <p className={`text-xs font-medium ${
                   stat.changeType === 'increase'
-                    ? 'text-green-600'
+                    ? 'text-emerald-200'
                     : stat.changeType === 'warning'
-                    ? 'text-amber-600'
+                    ? 'text-amber-200'
                     : stat.changeType === 'success'
-                    ? 'text-green-600'
-                    : 'text-slate-500'
+                    ? 'text-emerald-200'
+                    : 'text-white/60'
                 }`}>
                   {stat.change}
                 </p>
@@ -322,46 +316,46 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+          <Card className="border-white/12 bg-white/8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-                <Calendar className="h-5 w-5 text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <Calendar className="h-5 w-5 text-sky-200" />
                 Tonight&apos;s plan snapshot
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-3 gap-4 text-center text-white">
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-600">{planSummary.active}</div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">Active</div>
+                  <div className="text-2xl font-semibold text-emerald-200">{planSummary.active}</div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-white/60">Active</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-blue-600">{planSummary.standby}</div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">Standby</div>
+                  <div className="text-2xl font-semibold text-sky-200">{planSummary.standby}</div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-white/60">Standby</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-amber-600">{planSummary.ibl}</div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">IBL jobs</div>
+                  <div className="text-2xl font-semibold text-amber-200">{planSummary.ibl}</div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-white/60">IBL</div>
                 </div>
               </div>
-              <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-4 text-sm text-slate-600">
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm text-white/75">
                 <div className="flex items-center justify-between">
                   <span>Fleet availability</span>
                   <Badge variant="success">
                     {data?.fleet?.availability?.availability_rate?.toFixed(1) ?? '0'}%
                   </Badge>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Based on availability of active and standby trains with valid fitness certificates.
+                <p className="mt-2 text-xs text-white/60">
+                  Based on active and standby trains with valid multi-department fitness coverage.
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+          <Card className="border-white/12 bg-white/8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <AlertTriangle className="h-5 w-5 text-amber-300" />
                 Latest alerts
               </CardTitle>
             </CardHeader>
@@ -369,19 +363,19 @@ export default function Dashboard() {
               {alerts.slice(0, 3).map((alert) => (
                 <div
                   key={alert.alert_id}
-                  className="flex items-start gap-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-sm text-slate-700"
+                  className="flex items-start gap-3 rounded-2xl border border-white/15 bg-white/8 p-3 text-sm text-white/80"
                 >
                   <Badge variant={alert.severity === 'critical' ? 'danger' : alert.severity === 'warning' ? 'warning' : 'info'}>
                     {titleCase(alert.severity)}
                   </Badge>
                   <div>
-                    <div className="font-medium text-slate-800">{alert.message}</div>
-                    <div className="text-[11px] text-slate-500">{formatDate(alert.plan_date)}</div>
+                    <div className="font-medium text-white">{alert.message}</div>
+                    <div className="text-[11px] text-white/60">{formatDate(alert.plan_date)}</div>
                   </div>
                 </div>
               ))}
               {!alerts.length && (
-                <p className="text-sm text-slate-500">No alerts logged for the seed dataset.</p>
+                <p className="text-sm text-white/60">No alerts logged for the seed dataset.</p>
               )}
             </CardContent>
           </Card>
@@ -389,27 +383,24 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {focusAreas.map((focus) => (
-            <Card
-              key={focus.title}
-              className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur"
-            >
-              <CardContent className="space-y-3 p-6">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-                  <focus.icon className="h-4 w-4 text-blue-600" />
+            <Card key={focus.title} className="border-white/10 bg-white/8">
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-white/60">
+                  <focus.icon className="h-4 w-4 text-white/70" />
                   Operational focus
                 </div>
-                <h3 className="text-base font-semibold text-slate-800">{focus.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-600">{focus.description}</p>
+                <h3 className="text-lg font-semibold text-white">{focus.title}</h3>
+                <p className="text-sm leading-relaxed text-white/70">{focus.description}</p>
               </CardContent>
             </Card>
           ))}
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+          <Card className="border-white/12 bg-white/8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-                <TrendingUp className="h-5 w-5 text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <TrendingUp className="h-5 w-5 text-sky-200" />
                 Recent plans
               </CardTitle>
             </CardHeader>
@@ -417,57 +408,57 @@ export default function Dashboard() {
               {recentPlans.map((plan) => (
                 <div
                   key={plan.plan_id}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200/60 bg-white/90 p-4 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="font-medium text-slate-800">{formatDate(plan.plan_date)}</div>
-                    <Badge variant={plan.status === 'completed' ? 'success' : 'default'}>
-                      {plan.status}
+                  <div className="flex items-center gap-3">
+                    <div className="font-medium text-white">{formatDate(plan.plan_date)}</div>
+                    <Badge variant={plan.status === 'completed' ? 'success' : 'secondary'}>
+                      {titleCase(plan.status)}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-5 text-slate-500">
+                  <div className="flex items-center gap-4 text-white/70">
                     <div className="flex items-center gap-1">
-                      <Activity className="h-4 w-4 text-emerald-600" />
+                      <Activity className="h-4 w-4 text-emerald-200" />
                       {plan.active_count}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4 text-blue-600" />
+                      <Users className="h-4 w-4 text-sky-200" />
                       {plan.standby_count}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4 text-amber-600" />
+                      <Clock className="h-4 w-4 text-amber-200" />
                       {plan.ibl_count}
                     </div>
                   </div>
                 </div>
               ))}
               {!recentPlans.length && (
-                <p className="text-sm text-slate-500">Plan history not available yet.</p>
+                <p className="text-sm text-white/60">Plan history not available yet.</p>
               )}
             </CardContent>
           </Card>
-        </div>
 
-        <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
-              <Sparkles className="h-5 w-5 text-blue-600" />
-              Dataset coverage
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {dataCoverage.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 text-center"
-              >
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
-                <p className="text-xs text-slate-500">{item.footnote}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          <Card className="border-white/12 bg-white/8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <Sparkles className="h-5 w-5 text-sky-200" />
+                Dataset coverage
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {dataCoverage.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-white/15 bg-white/8 p-4 text-center"
+                >
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/60">{item.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+                  <p className="text-xs text-white/60">{item.footnote}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </Layout>
   )

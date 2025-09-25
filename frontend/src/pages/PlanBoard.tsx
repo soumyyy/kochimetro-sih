@@ -52,15 +52,15 @@ const fetchLatestPlan = async (): Promise<PlanBoardResponse> => {
 }
 
 const statusConfig: Record<PlanItem['decision'], { color: string; icon: typeof Activity }> = {
-  active: { color: 'bg-emerald-100 text-emerald-800', icon: Activity },
-  standby: { color: 'bg-blue-100 text-blue-800', icon: Users },
-  ibl: { color: 'bg-amber-100 text-amber-800', icon: Clock },
+  active: { color: 'bg-emerald-400/20 text-emerald-100', icon: Activity },
+  standby: { color: 'bg-sky-400/20 text-sky-100', icon: Users },
+  ibl: { color: 'bg-amber-400/25 text-amber-100', icon: Clock },
 }
 
 const priorityStyles: Record<PlanItem['priority'], string> = {
-  high: 'text-red-600',
-  medium: 'text-amber-600',
-  low: 'text-slate-500',
+  high: 'text-rose-200',
+  medium: 'text-amber-200',
+  low: 'text-white/60',
 }
 
 const formatPlanDate = (iso?: string): string =>
@@ -83,25 +83,16 @@ export default function PlanBoard() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="h-6 w-40 rounded bg-slate-100 animate-pulse" />
-              <div className="mt-2 h-4 w-64 rounded bg-slate-100 animate-pulse" />
-            </div>
-            <div className="flex gap-3">
-              <div className="h-9 w-28 rounded-full bg-slate-100 animate-pulse" />
-              <div className="h-9 w-32 rounded-full bg-slate-100 animate-pulse" />
-            </div>
-          </div>
+        <div className="space-y-10 text-white">
+          <div className="h-10 w-48 rounded-full bg-white/10 animate-pulse" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
+              <div key={idx} className="h-24 rounded-3xl bg-white/10 animate-pulse" />
             ))}
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, idx) => (
-              <div key={idx} className="min-h-[400px] rounded-2xl bg-slate-100 animate-pulse" />
+              <div key={idx} className="min-h-[360px] rounded-3xl bg-white/10 animate-pulse" />
             ))}
           </div>
         </div>
@@ -112,7 +103,7 @@ export default function PlanBoard() {
   if (!data) {
     return (
       <Layout>
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
+        <div className="rounded-3xl border border-white/15 bg-white/10 p-8 text-sm text-white/70 backdrop-blur-xl">
           No plans found. Seed the Supabase database and refresh.
         </div>
       </Layout>
@@ -123,20 +114,20 @@ export default function PlanBoard() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-10 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Plan board</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Latest plan for <span className="font-medium">{planDateLabel}</span>
+            <h1 className="text-3xl font-semibold tracking-tight text-white">Plan board</h1>
+            <p className="mt-2 text-sm text-white/70">
+              Latest plan for <span className="font-medium text-white">{planDateLabel}</span>
             </p>
           </div>
-          <div className="flex gap-3">
-            <button className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100/80 px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+          <div className="flex flex-wrap items-center gap-3">
+            <button className="inline-flex items-center rounded-full border border-white/20 bg-white/15 px-3.5 py-1.5 text-sm font-medium text-white/90 transition hover:bg-white/25">
               <Settings className="mr-2 h-4 w-4" />
               Weights
             </button>
-            <button className="inline-flex items-center rounded-full bg-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-[0_18px_35px_-20px_rgba(37,99,235,0.75)] transition hover:bg-blue-700">
+            <button className="inline-flex items-center rounded-full bg-sky-500/90 px-3.5 py-1.5 text-sm font-semibold text-white shadow-[0_20px_45px_-25px_rgba(14,165,233,0.7)] transition hover:bg-sky-400/90">
               <Play className="mr-2 h-4 w-4" />
               Run optimisation
             </button>
@@ -144,24 +135,24 @@ export default function PlanBoard() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <SummaryCard label="Active (target 7–9)" value={data.summary.active} accent="text-emerald-600" />
-          <SummaryCard label="Standby reserve" value={data.summary.standby} accent="text-blue-600" />
-          <SummaryCard label="IBL assignments" value={data.summary.ibl} accent="text-amber-600" />
-          <SummaryCard label="Fleet tracked" value={data.summary.total} accent="text-slate-700" />
+          <SummaryCard label="Active (target 7–9)" value={data.summary.active} accent="text-emerald-200" />
+          <SummaryCard label="Standby reserve" value={data.summary.standby} accent="text-sky-200" />
+          <SummaryCard label="IBL assignments" value={data.summary.ibl} accent="text-amber-200" />
+          <SummaryCard label="Fleet tracked" value={data.summary.total} accent="text-white" />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Column title={`Active (${columns.active.length})`} icon={Activity} colour="text-emerald-600">
+          <Column title={`Active (${columns.active.length})`} icon={Activity} colour="text-emerald-200">
             {columns.active.map((item) => (
               <PlanCard key={item.train_id} item={item} />
             ))}
           </Column>
-          <Column title={`Standby (${columns.standby.length})`} icon={Users} colour="text-blue-600">
+          <Column title={`Standby (${columns.standby.length})`} icon={Users} colour="text-sky-200">
             {columns.standby.map((item) => (
               <PlanCard key={item.train_id} item={item} />
             ))}
           </Column>
-          <Column title={`IBL (${columns.ibl.length})`} icon={Clock} colour="text-amber-600">
+          <Column title={`IBL (${columns.ibl.length})`} icon={Clock} colour="text-amber-200">
             {columns.ibl.map((item) => (
               <PlanCard key={item.train_id} item={item} />
             ))}
@@ -174,10 +165,10 @@ export default function PlanBoard() {
 
 function SummaryCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <Card className="rounded-2xl border border-slate-200/60 bg-white/90 shadow-sm backdrop-blur">
+    <Card className="border-white/12 bg-white/8">
       <CardContent className="p-4">
         <div className={`text-2xl font-semibold ${accent}`}>{value}</div>
-        <div className="text-sm text-slate-600">{label}</div>
+        <div className="text-sm text-white/70">{label}</div>
       </CardContent>
     </Card>
   )
@@ -196,7 +187,7 @@ function Column({
 }) {
   return (
     <div className="space-y-4">
-      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
         <Icon className={`h-5 w-5 ${colour}`} />
         {title}
       </h2>
@@ -204,7 +195,7 @@ function Column({
         {React.Children.count(children) > 0 ? (
           children
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          <div className="rounded-xl border border-dashed border-white/25 bg-white/5 p-4 text-sm text-white/60">
             No trains currently assigned
           </div>
         )}
@@ -220,11 +211,11 @@ function PlanCard({ item }: { item: PlanItem }) {
   const woBlocking = item.wo_blocking ?? false
 
   return (
-    <Card className="rounded-2xl border border-slate-200/60 bg-white/95 shadow-sm backdrop-blur transition hover:shadow-md">
+    <Card className="border-white/12 bg-white/10 transition hover:bg-white/15">
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-slate-900">{item.train_id}</h3>
+            <h3 className="font-semibold text-white">{item.train_id}</h3>
             <Badge className={statusColour}>
               <StatusIcon className="mr-1 h-3 w-3" />
               {item.decision.toUpperCase()}
@@ -238,34 +229,34 @@ function PlanCard({ item }: { item: PlanItem }) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-xs text-slate-600">
+        <div className="grid grid-cols-2 gap-3 text-xs text-white/70">
           <div className="flex items-center gap-2">
             {fitnessOk ? (
-              <CheckCircle className="h-4 w-4 text-emerald-500" />
+              <CheckCircle className="h-4 w-4 text-emerald-300" />
             ) : (
-              <XCircle className="h-4 w-4 text-red-500" />
+              <XCircle className="h-4 w-4 text-rose-300" />
             )}
             <span>Fitness</span>
           </div>
           <div className="flex items-center gap-2">
             {woBlocking ? (
-              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <AlertTriangle className="h-4 w-4 text-amber-300" />
             ) : (
-              <CheckCircle className="h-4 w-4 text-emerald-500" />
+              <CheckCircle className="h-4 w-4 text-emerald-300" />
             )}
             <span>Work orders</span>
           </div>
-          <div className="text-slate-600">
+          <div className="text-white/70">
             Brand Δ: {item.brand_deficit.toFixed(1)}h
           </div>
-          <div className={item.mileage_deviation > 0 ? 'text-red-600' : 'text-blue-600'}>
+          <div className={item.mileage_deviation > 0 ? 'text-rose-200' : 'text-sky-200'}>
             Mileage: {item.mileage_deviation > 0 ? '+' : ''}
             {item.mileage_deviation.toFixed(0)} km
           </div>
         </div>
 
         {item.cleaning_needed && (
-          <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="rounded-lg bg-amber-400/20 px-3 py-2 text-xs text-amber-100">
             🧹 Cleaning scheduled ({item.clean_type ?? 'IBL'})
           </div>
         )}
