@@ -93,37 +93,40 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ### Quick Start
 
-1. **Clone and setup:**
+1. **Clone & bootstrap:**
 ```bash
 git clone <repository-url>
 cd kochimetro-sih
 ```
 
-2. **Database setup:**
+2. **Seed the database:**
 ```bash
-# Create PostgreSQL database
 createdb metro
-
-# Run schema (includes seed data)
 psql -d metro -f db.sql
 ```
 
-3. **Backend setup:**
+3. **Start the backend:**
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-4. **Frontend setup:**
+4. **Start the frontend:**
 ```bash
 cd frontend
 npm install
 npm run dev
+# optional sanity check
+npm run build
 ```
 
+5. **Smoke check:** open `http://localhost:5173` and confirm the dashboard, plan board, IBL Gantt, depot view, and sponsor dashboards all hydrate from the API.
+
 ## API Reference
+
+> ℹ️ **Plan IDs:** Fetch the latest plan once (`GET /api/v1/plans/latest`) and reuse the returned `plan_id` for detail/explain/override/what-if calls. All other plan routes now require a valid UUID.
 
 ### Data Ingestion
 - `POST /ingest/gtfs` - Update GTFS-derived service expectations
@@ -142,28 +145,14 @@ npm run dev
 - `GET /branding/rollup` - Exposure analytics
 - `GET /mileage/variance` - Fleet mileage analysis
 
-## Frontend Views
+## Frontend Experience
 
-### PlanBoard (Main Dashboard)
-- 3-column layout: Active / Standby / IBL
-- Drag-and-drop train management
-- Real-time KPI display
-- Manual override capabilities
-
-### IBL Gantt
-- Per-bay timeline visualization
-- Crew capacity overlays
-- Conflict highlighting
-
-### DepotView
-- Stabling bay assignments
-- Turnout sequencing with ETAs
-- Conflict warnings
-
-### SponsorDash
-- Branding exposure analytics
-- Deficit tracking
-- Contract compliance
+- **Glass workspace:** Layout, Card, and Badge components render the liquid-glass aesthetic used across every page.
+- **Dashboard:** Hydrates from `/api/v1/dashboard/summary`, showing plan counts, alerts, and recent optimiser runs.
+- **Plan Board:** Uses `/api/v1/plans/latest`; cards surface fitness, work-order, and branding metrics for each train.
+- **IBL Gantt:** Pulls `ibl_gantt` slices from `/api/v1/plans/{plan_id}` to visualise the 21:00–05:30 cleaning window.
+- **Depot View:** `/api/v1/ref/depot` powers bay status, turnout order, and conflict detection overlays.
+- **Sponsor Dashboard:** `/api/v1/ref/sponsors` feeds sponsor-level rollups and campaign watchlists (default window anchors to the latest available plan date).
 
 ## Optimization Details
 
@@ -203,6 +192,15 @@ w_override = 3.0  # Manual override penalty
 - Property tests for optimization invariants
 - Integration tests for end-to-end workflows
 - Performance validation (stages complete within time windows)
+
+### Frontend checks
+- `npm run lint` to catch TypeScript or layout regressions.
+- `npm run build` to ensure the glass UI bundles cleanly.
+- Manual smoke test: Dashboard → Plan Board → IBL Gantt → Depot View → Sponsor Dashboard should all hydrate via FastAPI.
+
+### Troubleshooting
+- `422` when calling `/api/v1/plans/latest` usually means the route order regressed—static `/latest` must remain above the UUID routes.
+- Plan endpoints return `400` if overrides/what-if payloads omit a reason or contain invalid deltas.
 
 ## Performance Requirements
 - Stage 1: ≤ few seconds for 25 trains

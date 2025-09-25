@@ -15,6 +15,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000
 const SLOT_WIDTH_REM = 4
 const SLOTS_PER_WINDOW = 18
 const SLOT_MINUTES = 30
+const LEFT_COLUMN_WIDTH_REM = 16
 
 interface LatestPlanMeta {
   plan_id: string
@@ -34,6 +35,9 @@ interface IBLGanttSlot {
   train_id: string
   from_ts: string
   to_ts: string
+  job_type?: string
+  assigned_crew?: string
+  priority?: string
 }
 
 interface GanttJob {
@@ -44,6 +48,23 @@ interface GanttJob {
   durationHours: number
   startIndex: number
   endIndex: number
+  jobType?: string
+  assignedCrew?: string
+  priority?: string
+}
+
+interface DepotReferenceResponse {
+  depots: Array<{
+    depot_id: string
+    code?: string | null
+    name: string
+  }>
+  bays: Array<{
+    bay_id: string
+    depot_id: string
+    position_idx: number
+    is_active: boolean
+  }>
 }
 
 const fetchLatestPlanMeta = async (): Promise<LatestPlanMeta | null> => {
@@ -69,11 +90,97 @@ const fetchPlanDetails = async (planId: string): Promise<PlanDetailsResponse> =>
   return data
 }
 
+const fetchDepotReference = async (): Promise<DepotReferenceResponse> => {
+  const { data } = await axios.get(`${API_BASE_URL}/api/v1/reference/depot`, {
+    params: { include_occupancy: false },
+  })
+  return data
+}
+
 const formatTime = (date: Date): string =>
   date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
 
 const minutesBetween = (start: Date, end: Date): number =>
   (end.getTime() - start.getTime()) / (1000 * 60)
+
+const abbreviatePlanId = (planId: string): string =>
+  planId.length <= 12 ? planId : `${planId.slice(0, 8)}…${planId.slice(-4)}`
+
+const toTitleCase = (value: string): string =>
+  value
+    .split(/[_\s-]+/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ')
+
+const formatJobType = (jobType?: string): string => {
+  if (!jobType) return 'Maintenance'
+  const cleaned = jobType.trim()
+  if (!cleaned) return 'Maintenance'
+  return toTitleCase(cleaned)
+}
+
+type JobPalette = {
+  barClass: string
+  borderClass: string
+  textClass: string
+  dotClass: string
+  badgeVariant: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'secondary'
+}
+
+const getJobPalette = (jobType?: string): JobPalette => {
+  const normalized = jobType?.toLowerCase() ?? ''
+
+  if (normalized.includes('clean')) {
+    return {
+      barClass: 'bg-emerald-400/20',
+      borderClass: 'border-emerald-200/50',
+      textClass: 'text-emerald-100',
+      dotClass: 'bg-emerald-300/80',
+      badgeVariant: 'success',
+    }
+  }
+
+  if (normalized.includes('inspection')) {
+    return {
+      barClass: 'bg-amber-400/20',
+      borderClass: 'border-amber-200/50',
+      textClass: 'text-amber-100',
+      dotClass: 'bg-amber-300/80',
+      badgeVariant: 'warning',
+    }
+  }
+
+  if (normalized.includes('branding')) {
+    return {
+      barClass: 'bg-fuchsia-400/20',
+      borderClass: 'border-fuchsia-200/40',
+      textClass: 'text-fuchsia-100',
+      dotClass: 'bg-fuchsia-300/80',
+      badgeVariant: 'secondary',
+    }
+  }
+
+  return {
+    barClass: 'bg-sky-400/20',
+    borderClass: 'border-sky-200/40',
+    textClass: 'text-sky-100',
+    dotClass: 'bg-sky-300/80',
+    badgeVariant: 'info',
+  }
+}
+
+const getPriorityVariant = (priority?: string): JobPalette['badgeVariant'] => {
+  const normalized = priority?.toLowerCase()
+  switch (normalized) {
+    case 'high':
+      return 'danger'
+    case 'low':
+      return 'secondary'
+    default:
+      return 'warning'
+  }
+}
 
 export default function IBLGantt() {
   const {
@@ -92,6 +199,11 @@ export default function IBLGantt() {
     queryKey: ['plan-details', planId],
     queryFn: () => fetchPlanDetails(planId!),
     enabled: Boolean(planId),
+  })
+
+  const { data: depotMeta } = useQuery({
+    queryKey: ['depot-reference'],
+    queryFn: fetchDepotReference,
   })
 
   const isLoading = metaLoading || (Boolean(planId) && detailsLoading)
@@ -145,15 +257,51 @@ export default function IBLGantt() {
           durationHours: Math.max(durationMinutes / 60, 0),
           startIndex,
           endIndex,
+          jobType: slot.job_type,
+          assignedCrew: slot.assigned_crew,
+          priority: slot.priority,
         }
       })
       .sort((a, b) => a.start.getTime() - b.start.getTime())
   }, [planDetails?.ibl_gantt, windowStart])
 
+  const bayLabelLookup = useMemo(() => {
+    if (!depotMeta?.bays?.length) return new Map<string, { label: string; depotLabel?: string | null }>()
+    const depotLookup = new Map<string, { code?: string | null; name: string }>()
+    depotMeta.depots?.forEach((depot) => {
+      depotLookup.set(depot.depot_id, { code: depot.code, name: depot.name })
+    })
+
+    const entries = depotMeta.bays.reduce((acc, bay) => {
+      if (!bay.is_active) return acc
+      const depot = depotLookup.get(bay.depot_id)
+      const depotLabel = depot?.code ?? depot?.name ?? 'Depot'
+      acc.set(bay.bay_id, {
+        label: `${depotLabel} Bay ${bay.position_idx}`,
+        depotLabel,
+      })
+      return acc
+    }, new Map<string, { label: string; depotLabel?: string | null }>())
+
+    return entries
+  }, [depotMeta])
+
   const uniqueBays = useMemo(() => new Set(jobs.map((job) => job.bay_id)).size, [jobs])
   const uniqueTrains = useMemo(() => new Set(jobs.map((job) => job.train_id)).size, [jobs])
   const totalHours = useMemo(
     () => jobs.reduce((sum, job) => sum + job.durationHours, 0),
+    [jobs],
+  )
+
+  const jobTypeLegend = useMemo(
+    () =>
+      jobs.reduce<Array<{ label: string; palette: JobPalette }>>((acc, job) => {
+        const label = formatJobType(job.jobType)
+        if (acc.some((entry) => entry.label === label)) {
+          return acc
+        }
+        return [...acc, { label, palette: getJobPalette(job.jobType) }]
+      }, []),
     [jobs],
   )
 
@@ -212,7 +360,11 @@ export default function IBLGantt() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="info">Plan status: {planStatus}</Badge>
-            {planDetails?.plan_id && <Badge variant="secondary">Plan ID: {planDetails.plan_id}</Badge>}
+            {(planDetails?.plan_id ?? planMeta?.plan_id) && (
+              <Badge variant="secondary">
+                Plan ref: {abbreviatePlanId(planDetails?.plan_id ?? planMeta?.plan_id ?? '')}
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -256,13 +408,19 @@ export default function IBLGantt() {
               <div className="overflow-x-auto">
                 <div className="min-w-full">
                   <div className="flex border-b border-white/15">
-                    <div className="w-40 flex-shrink-0 p-2 text-sm font-semibold text-white">
-                      Bay / Train
+                    <div
+                      className="flex-shrink-0 p-2 text-sm font-semibold text-white"
+                      style={{ width: `${LEFT_COLUMN_WIDTH_REM}rem` }}
+                    >
+                      Bay &amp; train
                     </div>
-                    {timeSlots.map((label) => (
+                    {timeSlots.map((label, idx) => (
                       <div
                         key={label}
-                        className="w-16 flex-shrink-0 border-l border-white/10 p-2 text-center text-xs font-medium text-white/60"
+                        className={`flex-shrink-0 border-l border-white/10 p-2 text-center text-xs font-medium ${
+                          idx % 2 === 1 ? 'bg-white/5 text-white/70' : 'text-white/60'
+                        }`}
+                        style={{ width: `${SLOT_WIDTH_REM}rem` }}
                       >
                         {label}
                       </div>
@@ -273,22 +431,78 @@ export default function IBLGantt() {
                     {jobs.map((job) => {
                       const widthRem = Math.max(job.endIndex - job.startIndex, 0.5) * SLOT_WIDTH_REM
                       const leftRem = Math.max(job.startIndex, 0) * SLOT_WIDTH_REM
+                      const bayLookup = bayLabelLookup.get(job.bay_id)
+                      const bayLabel = bayLookup?.label ?? `Bay ${job.bay_id.slice(0, 6).toUpperCase()}`
+                      const palette = getJobPalette(job.jobType)
 
                       return (
-                        <div key={`${job.bay_id}-${job.train_id}-${job.start.toISOString()}`} className="flex border-b border-white/10">
-                          <div className="w-40 flex-shrink-0 p-2">
-                            <div className="text-sm font-semibold text-white">{job.bay_id}</div>
-                            <div className="text-xs text-white/70">{job.train_id}</div>
-                            <div className="text-xs text-white/60">
-                              {formatTime(job.start)} – {formatTime(job.end)}
+                        <div
+                          key={`${job.bay_id}-${job.train_id}-${job.start.toISOString()}`}
+                          className="flex border-b border-white/10 bg-white/[0.015] transition hover:bg-white/[0.06]"
+                        >
+                          <div
+                            className="flex-shrink-0 border-r border-white/10 p-4"
+                            style={{ width: `${LEFT_COLUMN_WIDTH_REM}rem` }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-white">{bayLabel}</p>
+                              {job.priority && job.priority.toLowerCase() !== 'medium' && (
+                                <Badge variant={getPriorityVariant(job.priority)} className="text-[11px] uppercase">
+                                  {toTitleCase(job.priority)} priority
+                                </Badge>
+                              )}
                             </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/70">
+                              <Badge variant="secondary" className="text-[11px] uppercase tracking-wide">
+                                Train {job.train_id}
+                              </Badge>
+                              <Badge variant={palette.badgeVariant} className="text-[11px]">
+                                {formatJobType(job.jobType)}
+                              </Badge>
+                              {job.assignedCrew && (
+                                <span className="rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] text-white/60">
+                                  Crew: {job.assignedCrew}
+                                </span>
+                              )}
+                            </div>
+                            <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-white/60">
+                              <div>
+                                <dt className="text-[10px] uppercase tracking-wide text-white/40">Start</dt>
+                                <dd className="font-medium text-white/70">{formatTime(job.start)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase tracking-wide text-white/40">End</dt>
+                                <dd className="font-medium text-white/70">{formatTime(job.end)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase tracking-wide text-white/40">Duration</dt>
+                                <dd className="font-medium text-white/70">{job.durationHours.toFixed(1)} h</dd>
+                              </div>
+                            </dl>
                           </div>
-                          <div className="relative flex-1">
-                            <div
-                              className="absolute top-1 flex h-10 items-center overflow-hidden rounded-2xl border border-sky-200/40 bg-sky-400/20 px-3 text-xs text-sky-100"
-                              style={{ left: `${leftRem}rem`, width: `${widthRem}rem` }}
-                            >
-                              <span className="truncate">{job.durationHours.toFixed(1)} h scheduled</span>
+                          <div
+                            className="relative flex-1"
+                            style={{ minWidth: `${Math.max(timeSlots.length, SLOTS_PER_WINDOW) * SLOT_WIDTH_REM}rem` }}
+                          >
+                            <div className="pointer-events-none absolute inset-0 flex">
+                              {timeSlots.map((_, idx) => (
+                                <div
+                                  key={`grid-${job.bay_id}-${job.start.toISOString()}-${idx}`}
+                                  className={`h-full border-l border-white/10 ${idx % 2 === 1 ? 'bg-white/[0.05]' : 'bg-transparent'}`}
+                                  style={{ width: `${SLOT_WIDTH_REM}rem` }}
+                                />
+                              ))}
+                            </div>
+                            <div className="relative h-20">
+                              <div
+                                className={`absolute top-3 flex h-14 items-center overflow-hidden rounded-2xl border px-4 text-sm font-medium backdrop-blur ${palette.barClass} ${palette.borderClass} ${palette.textClass}`}
+                                style={{ left: `${leftRem}rem`, width: `${widthRem}rem` }}
+                              >
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span className="truncate">{formatJobType(job.jobType)}</span>
+                                  <span className="text-xs text-white/80">{job.durationHours.toFixed(1)} h</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -296,6 +510,16 @@ export default function IBLGantt() {
                     })}
                   </div>
                 </div>
+              </div>
+            )}
+            {jobTypeLegend.length > 0 && (
+              <div className="mt-6 flex flex-wrap gap-4 text-xs text-white/60">
+                {jobTypeLegend.map(({ label, palette }) => (
+                  <span key={label} className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full border border-white/40 ${palette.dotClass}`} />
+                    <span className="font-medium text-white/70">{label}</span>
+                  </span>
+                ))}
               </div>
             )}
           </CardContent>

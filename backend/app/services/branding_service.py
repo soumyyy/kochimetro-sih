@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import BrandingCampaign, BrandingExposureLog, Train
+from ..models import BrandingCampaign, BrandingExposureLog, Train, InductionPlan
 
 
 class BrandingService:
@@ -22,7 +22,7 @@ class BrandingService:
         if window <= 0:
             raise ValueError("window must be positive")
 
-        window_end = end_date or date.today()
+        window_end = await self._resolve_end_date(end_date)
         window_start = window_end - timedelta(days=window - 1)
 
         exposures_by_wrap = await self._get_exposure_by_wrap(window_start, window_end)
@@ -119,6 +119,14 @@ class BrandingService:
             "campaigns": campaign_summaries,
             "totals": totals,
         }
+
+    async def _resolve_end_date(self, end_date: Optional[date]) -> date:
+        if end_date:
+            return end_date
+
+        result = await self.db.execute(select(func.max(InductionPlan.plan_date)))
+        plan_date = result.scalar_one_or_none()
+        return plan_date or date.today()
 
     async def _get_exposure_by_wrap(self, start_date: date, end_date: date) -> Dict[str, float]:
         """Return total exposure hours per wrap for the window."""

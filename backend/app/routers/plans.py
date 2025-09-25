@@ -20,24 +20,6 @@ class PlanCreate(BaseModel):
     notes: Optional[str] = None
 
 
-class PlanResponse(BaseModel):
-    """Plan response structure"""
-    plan_id: str
-    plan_date: date
-    status: str
-    summary: Dict[str, Any]
-    created_at: str
-
-
-class PlanRunResponse(BaseModel):
-    """Plan execution response"""
-    plan_id: str
-    summary: Dict[str, Any]
-    items: list
-    ibl_gantt: list
-    turnout: list
-
-
 class PlanOverrideRequest(BaseModel):
     """Manual override payload"""
     decision: Optional[str] = None

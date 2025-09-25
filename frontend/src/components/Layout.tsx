@@ -1,6 +1,8 @@
+
 import type { ReactNode } from 'react'
-import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import axios from 'axios'
 import {
   LayoutDashboard,
   Calendar,
@@ -22,15 +24,73 @@ const navigation = [
   { name: 'Sponsors', href: '/sponsors', icon: BarChart3, blurb: 'Brand exposure' },
 ]
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+
+interface PlanWindowMeta {
+  windowLabel: string
+  lastRefresh: string
+  datasetRange: string
+}
+
+interface PlanRangeResponse {
+  start?: string | null
+  end?: string | null
+}
+
+interface DashboardMetaResponse {
+  latest_plan: {
+    plan_id: string | null
+    plan_date: string | null
+  } | null
+  data_window: PlanRangeResponse | null
+}
+
+const fetchPlanWindowMeta = async (): Promise<PlanWindowMeta> => {
+  try {
+    const { data } = await axios.get<DashboardMetaResponse>(`${API_BASE_URL}/api/v1/dashboard/summary`, {
+      params: { include_details: false }
+    })
+
+    const planDate = data.latest_plan?.plan_date
+    const range = data.data_window ?? {}
+    const start = range.start ? new Date(range.start) : null
+    const end = range.end ? new Date(range.end) : null
+
+    const dateFormatter = Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+
+    const datasetRange = start && end
+      ? `${dateFormatter.format(start)} – ${dateFormatter.format(end)}`
+      : 'Seed data range'
+
+    return {
+      windowLabel: planDate ? `Plan for ${dateFormatter.format(new Date(planDate))}` : 'Latest plan snapshot',
+      lastRefresh: new Date().toLocaleString(),
+      datasetRange,
+    }
+  } catch (error) {
+    return {
+      windowLabel: 'Latest plan snapshot',
+      lastRefresh: new Date().toLocaleString(),
+      datasetRange: 'Seed data range',
+    }
+  }
+}
+
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
-  const planMeta = useMemo(() => {
-    return {
-      windowLabel: 'Tonight · 21:00 – 05:30 IST',
-      lastRefresh: '28 Jan 2025 · 18:45 IST',
-      datasetRange: 'Synthetic snapshot · 01 Jan – 28 Jan 2025',
-    }
-  }, [])
+  const { data: planMeta } = useQuery({
+    queryKey: ['layout-plan-meta'],
+    queryFn: fetchPlanWindowMeta,
+    staleTime: 60 * 1000,
+  })
+
+  const windowLabel = planMeta?.windowLabel ?? 'Latest plan snapshot'
+  const lastRefresh = planMeta?.lastRefresh ?? new Date().toLocaleString()
+  const datasetRange = planMeta?.datasetRange ?? 'Seed data range'
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -42,20 +102,20 @@ export default function Layout({ children }: LayoutProps) {
 
       <div className="relative z-10 flex min-h-screen flex-col px-4 pt-8 pb-36 sm:px-6 lg:px-12">
         <header className="mx-auto w-full max-w-6xl rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
-          <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex flex_wrap items-center justify-between gap-6">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">
                 <Sparkles className="h-4 w-4 text-sky-200" />
                 Plan window
               </div>
-              <p className="text-xl font-semibold text-white sm:text-2xl">{planMeta.windowLabel}</p>
-              <p className="text-sm text-white/70">{planMeta.datasetRange}</p>
+              <p className="text-xl font-semibold text-white sm:text-2xl">{windowLabel}</p>
+              <p className="text-sm text-white/70">{datasetRange}</p>
             </div>
             <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/15 px-4 py-3 backdrop-blur-xl">
               <Clock className="h-4 w-4 text-sky-200" />
               <div className="leading-tight">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-white/60">Last sync</p>
-                <p className="text-sm font-semibold text-white">{planMeta.lastRefresh}</p>
+                <p className="text-sm font-semibold text-white">{lastRefresh}</p>
               </div>
             </div>
           </div>
