@@ -200,7 +200,8 @@ class PlanningService:
         return {
             "train_id": feature.train_id,
             "fitness_ok": feature.fit_ok,
-            "fit_expiry_buffer_hours": feature.fit_expiry_buffer_hours,
+            "fit_status_code": feature.fit_status_code,
+            "fit_expiry_buffer_hours": _safe_number(feature.fit_expiry_buffer_hours),
             "wo_blocking": feature.wo_blocking,
             "critical_wo_count": feature.critical_wo_count,
             "total_wo_count": feature.total_wo_count,
@@ -486,7 +487,7 @@ class PlanningService:
         return [
             {
                 "plan_id": str(plan.plan_id),
-                "plan_date": plan.plan_date,
+                "plan_date": plan.plan_date.isoformat() if plan.plan_date else None,
                 "created_by": plan.created_by,
                 "status": plan.status,
                 "weights_json": plan.weights_json,
@@ -719,8 +720,11 @@ class PlanningService:
                     "wrap_id": train.wrap_id,
                     "brand_code": train.brand_code,
                     "fitness_ok": feature.fit_ok if feature else None,
+                    "fit_status_code": feature.fit_status_code if feature else None,
+                    "fit_expiry_buffer_hours": _safe_number(feature.fit_expiry_buffer_hours) if feature else None,
                     "wo_blocking": feature.wo_blocking if feature else None,
                     "brand_deficit": round(feature.brand_rolling_deficit_h, 2) if feature else 0.0,
+                    "brand_target": _safe_number(feature.brand_target_h) if feature else None,
                     "mileage_deviation": round(feature.mileage_dev, 1) if feature else 0.0,
                     "cleaning_needed": feature.needs_clean if feature else False,
                     "clean_type": feature.clean_type if feature else None,

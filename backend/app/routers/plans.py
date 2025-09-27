@@ -88,6 +88,18 @@ async def run_plan(
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
+@router.get("/list", summary="List plans")
+async def list_plans(
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get list of plans with pagination"""
+    planning_service = PlanningService(db)
+    plans = await planning_service.get_plans_list(limit, offset)
+    return {"plans": plans}
+
+
 @router.patch("/{plan_id}/items/{train_id}", summary="Manual override")
 async def override_plan_item(
     plan_id: UUID,
@@ -161,18 +173,6 @@ async def finalize_plan(
         return {"message": "Plan finalized successfully", "success": success}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/list", summary="List plans")
-async def list_plans(
-    limit: int = 50,
-    offset: int = 0,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get list of plans with pagination"""
-    planning_service = PlanningService(db)
-    plans = await planning_service.get_plans_list(limit, offset)
-    return {"plans": plans}
 
 
 @router.get("/fleet/status", summary="Get fleet status")

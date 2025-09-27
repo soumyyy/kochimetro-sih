@@ -40,8 +40,11 @@ interface PlanItem {
   wrap_id?: string | null
   brand_code?: string | null
   fitness_ok: boolean | null
+  fit_status_code?: number | null
+  fit_expiry_buffer_hours?: number | null
   wo_blocking: boolean | null
   brand_deficit: number
+  brand_target?: number | null
   mileage_deviation: number
   cleaning_needed: boolean
   clean_type?: string | null
@@ -219,8 +222,55 @@ function Column({
 function PlanCard({ item }: { item: PlanItem }) {
   const StatusIcon = statusConfig[item.decision].icon
   const statusColour = statusConfig[item.decision].color
-  const fitnessOk = item.fitness_ok ?? false
+  const fitnessStatusCode = item.fit_status_code ?? (item.fitness_ok ?? false ? 0 : 1)
+  const fitnessBuffer = item.fit_expiry_buffer_hours ?? undefined
   const woBlocking = item.wo_blocking ?? false
+  const brandDeficit = typeof item.brand_deficit === 'number' ? item.brand_deficit : null
+  const brandTarget = typeof item.brand_target === 'number' ? item.brand_target : null
+  const mileageDeviation = typeof item.mileage_deviation === 'number' ? item.mileage_deviation : null
+
+  const formattedBrandDelta = brandDeficit === null
+    ? null
+    : new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: Math.abs(brandDeficit) < 1 ? 2 : 1,
+      }).format(brandDeficit)
+
+  const formattedMileage = mileageDeviation === null
+    ? null
+    : new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: Math.abs(mileageDeviation) < 1 ? 2 : 0,
+      }).format(Math.abs(mileageDeviation))
+
+  const mileageClass = mileageDeviation === null
+    ? 'text-white/60'
+    : mileageDeviation > 0
+    ? 'text-rose-200'
+    : mileageDeviation < 0
+    ? 'text-emerald-200'
+    : 'text-sky-200'
+
+  const { icon: FitnessStateIcon, className: fitnessIconClass, label: fitnessLabel } = (() => {
+    switch (fitnessStatusCode) {
+      case 1:
+        return {
+          icon: XCircle,
+          className: 'text-rose-300',
+          label: 'Fitness expired',
+        }
+      case -1:
+        return {
+          icon: AlertTriangle,
+          className: 'text-amber-300',
+          label: 'Fitness expiring soon',
+        }
+      default:
+        return {
+          icon: CheckCircle,
+          className: 'text-emerald-300',
+          label: 'Fitness OK',
+        }
+    }
+  })()
 
   return (
     <Card className="border-white/12 bg-white/10 transition hover:bg-white/15">
@@ -243,12 +293,13 @@ function PlanCard({ item }: { item: PlanItem }) {
 
         <div className="grid grid-cols-2 gap-3 text-xs text-white/70">
           <div className="flex items-center gap-2">
-            {fitnessOk ? (
-              <CheckCircle className="h-4 w-4 text-emerald-300" />
-            ) : (
-              <XCircle className="h-4 w-4 text-rose-300" />
-            )}
-            <span>Fitness</span>
+            <FitnessStateIcon className={`h-4 w-4 ${fitnessIconClass}`} />
+            <span>
+              {fitnessLabel}
+              {typeof fitnessBuffer === 'number' && fitnessStatusCode !== 1 && (
+                <span className="ml-1 text-white/50">({fitnessBuffer.toFixed(1)}h)</span>
+              )}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             {woBlocking ? (
@@ -259,11 +310,30 @@ function PlanCard({ item }: { item: PlanItem }) {
             <span>Work orders</span>
           </div>
           <div className="text-white/70">
-            Brand Δ: {item.brand_deficit.toFixed(1)}h
+            {item.wrap_id ? (
+              <>
+                Brand {brandTarget && brandTarget > 0
+                  ? `target ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(brandTarget)}h/day`
+                  : 'exposure'}
+                <span className="ml-1 text-white/60">
+                  {formattedBrandDelta === null
+                    ? '· data unavailable'
+                    : brandDeficit !== null && brandDeficit > 0
+                    ? `${formattedBrandDelta}h short`
+                    : '· on target'}
+                </span>
+              </>
+            ) : (
+              'Brand: no wrap assigned'
+            )}
           </div>
-          <div className={item.mileage_deviation > 0 ? 'text-rose-200' : 'text-sky-200'}>
-            Mileage: {item.mileage_deviation > 0 ? '+' : ''}
-            {item.mileage_deviation.toFixed(0)} km
+          <div className={mileageClass}>
+            Mileage:{' '}
+            {formattedMileage === null
+              ? 'data unavailable'
+              : mileageDeviation === 0
+              ? 'balanced'
+              : `${mileageDeviation !== null && mileageDeviation > 0 ? '+' : '−'}${formattedMileage} km vs fleet`}
           </div>
         </div>
 

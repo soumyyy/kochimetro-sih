@@ -122,6 +122,17 @@ export default function DepotView() {
     [data?.bays],
   )
 
+  const bayLabelById = useMemo(() => {
+    const depotLookup = new Map(depots.map((depot) => [depot.depot_id, depot]))
+    const mapping = new Map<string, string>()
+    bays.forEach((bay) => {
+      const depot = depotLookup.get(bay.depot_id)
+      const prefix = depot?.code ?? depot?.name ?? 'Depot'
+      mapping.set(bay.bay_id, `${prefix} Bay ${bay.position_idx.toString().padStart(2, '0')}`)
+    })
+    return mapping
+  }, [depots, bays])
+
   const turnoutSchedule = useMemo(() => {
     if (!data?.bays) return []
     const assignments = data.bays.flatMap((bay) =>
@@ -231,13 +242,15 @@ export default function DepotView() {
               <div className="space-y-3">
                 {bays.map((bay) => {
                   const status = bayStatus(bay)
+                  const bayLabel = bayLabelById.get(bay.bay_id) ?? `Bay ${bay.position_idx.toString().padStart(2, '0')}`
                   return (
                     <div
                       key={bay.bay_id}
                       className={`flex items-center justify-between rounded-xl px-4 py-3 ${statusBadgeClass(status)}`}
                     >
                       <div>
-                        <div className="text-sm font-semibold text-white">{bay.bay_id}</div>
+                        <div className="text-sm font-semibold text-white">{bayLabel}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-white/40">ID {bay.bay_id.slice(0, 8).toUpperCase()}</div>
                         <div className="text-xs text-white/70">
                           Position {bay.position_idx} · {bay.electrified ? 'Electrified' : 'Non-electrified'} ·
                           Access {bay.access_time_min} min
@@ -284,16 +297,19 @@ export default function DepotView() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {turnoutSchedule.map((item) => (
-                    <div
-                      key={`${item.train_id}-${item.turnout_rank}`}
-                      className="flex items-center justify-between rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/80"
-                    >
-                      <div className="font-medium text-white">{item.train_id}</div>
-                      <div className="text-xs text-white/60">Bay {item.bay_id}</div>
-                      <Badge variant="secondary">#{item.turnout_rank}</Badge>
-                    </div>
-                  ))}
+                  {turnoutSchedule.map((item) => {
+                    const bayLabel = bayLabelById.get(item.bay_id) ?? `Bay ${item.bay_id.slice(0, 6).toUpperCase()}`
+                    return (
+                      <div
+                        key={`${item.train_id}-${item.turnout_rank}`}
+                        className="flex items-center justify-between rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/80"
+                      >
+                        <div className="font-medium text-white">{item.train_id}</div>
+                        <div className="text-xs text-white/60">{bayLabel}</div>
+                        <Badge variant="secondary">#{item.turnout_rank}</Badge>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

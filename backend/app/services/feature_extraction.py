@@ -1,10 +1,8 @@
-"""
-Feature Extraction Service
-Extracts deterministic features from database for optimization engine
-"""
+"""Feature Extraction Service for optimisation inputs."""
 import math
+from collections import defaultdict
 from datetime import datetime, date, time, timedelta
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -30,6 +28,7 @@ class TrainFeatures:
         # Fitness gates
         self.fit_ok: bool = True
         self.fit_expiry_buffer_hours: float = float("inf")
+        self.fit_status_code: int = 0  # 0=healthy, -1=expiring soon, 1=failed
 
         # Work order gates
         self.wo_blocking: bool = False
@@ -60,6 +59,9 @@ class TrainFeatures:
         self.explanation: Dict[str, Any] = {}
 
 
+FITNESS_WARNING_BUFFER_HOURS = 24
+
+
 class FeatureExtractionService:
     """Service for extracting features from database for optimization"""
 
@@ -69,56 +71,67 @@ class FeatureExtractionService:
         self.service_end = time(22, 30)  # 22:30
 
     async def extract_features(self, plan_date: date, train_ids: Optional[List[str]] = None) -> Dict[str, TrainFeatures]:
-        """Extract features for all trains or specified trains"""
+        """Extract features for all trains or specified trains with batched queries."""
+        train_query = select(Train)
+        if train_ids is not None:
+            train_query = train_query.where(Train.train_id.in_(train_ids))
+
+        train_result = await self.db.execute(train_query)
+        train_rows: List[Train] = train_result.scalars().all()
+
         if train_ids is None:
-            result = await self.db.execute(select(Train))
-            trains = result.scalars().all()
-            train_ids = [t.train_id for t in trains]
+            train_ids = [train.train_id for train in train_rows]
+
+        train_map = {train.train_id: train for train in train_rows}
+
+        fitness_map = await self._prefetch_fitness_certificates(train_ids)
+        job_card_map = await self._prefetch_job_cards(train_ids)
+
+        bay_ids = [train.current_bay for train in train_rows if train.current_bay]
+        cleaning_counts = await self._prefetch_cleaning_slots(bay_ids)
 
         features: Dict[str, TrainFeatures] = {}
 
         for train_id in train_ids:
+            train = train_map.get(train_id)
+            if not train:
+                continue
+
+            feature = TrainFeatures(train_id)
+            feature.current_bay = str(train.current_bay) if train.current_bay else None
+
             try:
-                features[train_id] = await self._extract_single_train_features(train_id, plan_date)
+                self._apply_fitness_features(
+                    feature,
+                    fitness_map.get(train_id, []),
+                    plan_date,
+                )
+                self._apply_wo_features(feature, job_card_map.get(train_id, []))
+                await self._extract_branding_features(feature, train, plan_date)
+                await self._extract_mileage_features(feature, train_id)
+                self._apply_cleaning_features(
+                    feature,
+                    cleaning_counts.get(feature.current_bay or "", 0),
+                )
+                await self._extract_depot_features(feature)
             except Exception as exc:  # pragma: no cover - defensive fallback
-                feature = TrainFeatures(train_id)
                 feature.fit_ok = False
                 feature.explanation["error"] = str(exc)
-                features[train_id] = feature
+
+            features[train_id] = feature
 
         return features
 
-    async def _extract_single_train_features(self, train_id: str, plan_date: date) -> TrainFeatures:
-        """Extract features for a single train"""
-        features = TrainFeatures(train_id)
-
-        train_result = await self.db.execute(select(Train).where(Train.train_id == train_id))
-        train = train_result.scalar_one_or_none()
-        if not train:
-            raise ValueError(f"Train {train_id} not found")
-
-        features.current_bay = str(train.current_bay) if train.current_bay else None
-
-        await self._extract_fitness_features(features, train_id, plan_date)
-        await self._extract_wo_features(features, train_id)
-        await self._extract_branding_features(features, train, plan_date)
-        await self._extract_mileage_features(features, train_id)
-        await self._extract_cleaning_features(features, train)
-        await self._extract_depot_features(features)
-
-        return features
-
-    async def _extract_fitness_features(self, features: TrainFeatures, train_id: str, plan_date: date) -> None:
-        """Extract fitness certificate features"""
-        result = await self.db.execute(
-            select(FitnessCertificate)
-            .where(FitnessCertificate.train_id == train_id)
-            .where(FitnessCertificate.status.in_(["valid", "expiring"]))
-        )
-        certificates = result.scalars().all()
-
+    def _apply_fitness_features(
+        self,
+        features: TrainFeatures,
+        certificates: Iterable[FitnessCertificate],
+        plan_date: date,
+    ) -> None:
+        certificates = list(certificates)
         if not certificates:
             features.fit_ok = False
+            features.fit_status_code = 1
             features.explanation["fitness"] = "No valid certificates found"
             return
 
@@ -150,24 +163,24 @@ class FeatureExtractionService:
                 break
 
         features.fit_ok = all_valid
-        features.fit_expiry_buffer_hours = min_expiry_buffer if all_valid else 0.0
-
         if all_valid:
-            features.explanation["fitness"] = (
-                f"{len(certificates)} certificates valid, buffer {min_expiry_buffer:.1f}h"
-            )
+            features.fit_expiry_buffer_hours = min_expiry_buffer
+            if min_expiry_buffer != float("inf") and min_expiry_buffer <= FITNESS_WARNING_BUFFER_HOURS:
+                features.fit_status_code = -1
+                features.explanation["fitness"] = (
+                    f"Certificates valid – expires in {min_expiry_buffer:.1f}h"
+                )
+            else:
+                features.fit_status_code = 0
+                features.explanation["fitness"] = (
+                    f"{len(certificates)} certificates valid, buffer {min_expiry_buffer:.1f}h"
+                )
+        else:
+            features.fit_expiry_buffer_hours = 0.0
+            features.fit_status_code = 1
 
-    async def _extract_wo_features(self, features: TrainFeatures, train_id: str) -> None:
-        """Extract work order features"""
-        blocking_statuses = {"WAPPR", "APPR", "INPRG", "WSCH", "WMATL"}
-
-        result = await self.db.execute(
-            select(JobCard)
-            .where(JobCard.train_id == train_id)
-            .where(JobCard.status.in_(blocking_statuses))
-        )
-        job_cards = result.scalars().all()
-
+    def _apply_wo_features(self, features: TrainFeatures, job_cards: Iterable[JobCard]) -> None:
+        job_cards = list(job_cards)
         features.total_wo_count = len(job_cards)
 
         critical_blocking = [
@@ -247,19 +260,10 @@ class FeatureExtractionService:
             f"deviation {features.mileage_dev:.0f}km"
         )
 
-    async def _extract_cleaning_features(self, features: TrainFeatures, train: Train) -> None:
-        """Extract cleaning requirements (placeholder)"""
-        if not train.current_bay:
+    def _apply_cleaning_features(self, features: TrainFeatures, scheduled: int) -> None:
+        if not features.current_bay:
             features.explanation["cleaning"] = "No bay assigned; assuming clean"
             return
-
-        upcoming_cleaning = await self.db.execute(
-            select(func.count())
-            .select_from(CleaningSlot)
-            .where(CleaningSlot.bay_id == train.current_bay)
-            .where(CleaningSlot.start_ts >= datetime.now())
-        )
-        scheduled = int(upcoming_cleaning.scalar() or 0)
 
         if scheduled:
             features.needs_clean = True
@@ -308,3 +312,42 @@ class FeatureExtractionService:
         )
         avg_km, std_km = result.first() or (0.0, 0.0)
         return float(avg_km or 0.0), float(std_km or 0.0)
+
+    async def _prefetch_fitness_certificates(self, train_ids: List[str]) -> Dict[str, List[FitnessCertificate]]:
+        if not train_ids:
+            return {}
+        result = await self.db.execute(
+            select(FitnessCertificate)
+            .where(FitnessCertificate.train_id.in_(train_ids))
+            .where(FitnessCertificate.status.in_(["valid", "expiring"]))
+        )
+        certificates = defaultdict(list)
+        for cert in result.scalars():
+            certificates[cert.train_id].append(cert)
+        return certificates
+
+    async def _prefetch_job_cards(self, train_ids: List[str]) -> Dict[str, List[JobCard]]:
+        if not train_ids:
+            return {}
+        blocking_statuses = {"WAPPR", "APPR", "INPRG", "WSCH", "WMATL"}
+        result = await self.db.execute(
+            select(JobCard)
+            .where(JobCard.train_id.in_(train_ids))
+            .where(JobCard.status.in_(blocking_statuses))
+        )
+        job_cards = defaultdict(list)
+        for card in result.scalars():
+            job_cards[card.train_id].append(card)
+        return job_cards
+
+    async def _prefetch_cleaning_slots(self, bay_ids: Iterable[Any]) -> Dict[str, int]:
+        bay_ids = [bay_id for bay_id in bay_ids if bay_id]
+        if not bay_ids:
+            return {}
+        result = await self.db.execute(
+            select(CleaningSlot.bay_id, func.count())
+            .where(CleaningSlot.bay_id.in_(bay_ids))
+            .where(CleaningSlot.start_ts >= datetime.now())
+            .group_by(CleaningSlot.bay_id)
+        )
+        return {str(row[0]): int(row[1]) for row in result.all()}

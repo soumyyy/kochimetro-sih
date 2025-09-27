@@ -296,6 +296,7 @@ async def get_trains(
         if feature:
             feature_payload = {
                 "fitness_ok": feature.fit_ok,
+                "fit_status_code": feature.fit_status_code,
                 "fit_expiry_buffer_hours": _safe_number(feature.fit_expiry_buffer_hours),
                 "wo_blocking": feature.wo_blocking,
                 "critical_wo_count": feature.critical_wo_count,

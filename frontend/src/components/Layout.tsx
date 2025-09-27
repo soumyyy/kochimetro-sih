@@ -1,5 +1,5 @@
 
-import type { ChangeEvent, ReactNode } from 'react'
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
@@ -9,10 +9,8 @@ import {
   MapPin,
   BarChart3,
   Sparkles,
-  Clock
 } from 'lucide-react'
 import { usePlanDate } from '../context/PlanDateContext'
-import { Badge } from './ui/badge'
 
 interface LayoutProps {
   children: ReactNode
@@ -101,24 +99,34 @@ export default function Layout({ children }: LayoutProps) {
   })
 
   const windowLabel = planMeta?.windowLabel ?? 'Latest plan snapshot'
-  const lastRefresh = planMeta?.lastRefresh ?? new Date().toLocaleString()
   const datasetRange = planMeta?.datasetRange ?? 'Seed data range'
   const effectivePlanDate = planMeta?.planDate ?? latestPlanDate
+  const [customMode, setCustomMode] = useState(false)
 
   const handlePlanDateChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const next = event.target.value
     if (next === '__custom') {
+      if (!planDate) {
+        const fallback = new Date().toISOString().slice(0, 10)
+        setPlanDate(fallback)
+      }
+      setCustomMode(true)
       return
     }
+    setCustomMode(false)
     setPlanDate(next ? next : null)
   }
 
   const handlePlanDateInput = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.value
+    setCustomMode(true)
     setPlanDate(next ? next : null)
   }
 
-  const clearPlanDate = () => setPlanDate(null)
+  const clearPlanDate = () => {
+    setCustomMode(false)
+    setPlanDate(null)
+  }
 
   const formattedSelectedDate = effectivePlanDate
     ? new Date(effectivePlanDate).toLocaleDateString(undefined, {
@@ -130,7 +138,17 @@ export default function Layout({ children }: LayoutProps) {
 
   const minPlanDate = options.length ? options[options.length - 1].value : undefined
   const maxPlanDate = latestPlanDate ?? options[0]?.value
-  const isCustomDate = planDate !== null && !options.some((option) => option.value === planDate)
+  const isCustomDate = customMode || (planDate !== null && !options.some((option) => option.value === planDate))
+
+  useEffect(() => {
+    if (planDate === null) {
+      setCustomMode(false)
+      return
+    }
+    if (options.some((option) => option.value === planDate)) {
+      setCustomMode(false)
+    }
+  }, [planDate, options])
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
@@ -143,59 +161,53 @@ export default function Layout({ children }: LayoutProps) {
       <div className="relative z-10 flex min-h-screen flex-col px-4 pt-8 pb-36 sm:px-6 lg:px-12">
         <header className="mx-auto w-full max-w-6xl rounded-3xl border border-white/12 bg-white/10 px-5 py-5 shadow-[0_24px_65px_-36px_rgba(15,23,42,0.9)] backdrop-blur-2xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.4em] text-white/60">
+                <Sparkles className="h-4 w-4 text-sky-200" />
+                Plan window
+              </div>
+              <p className="text-base font-semibold text-white">{windowLabel}</p>
+              <p className="text-xs text-white/65">Data range · {datasetRange}</p>
+            </div>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/12">
-                <Sparkles className="h-5 w-5 text-sky-200" />
+              <div className="text-xs text-white/65">
+                Showing
+                <span className="ml-2 inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/12 px-3 py-2 text-sm font-medium text-white/90 backdrop-blur-xl">
+                  <span>{formattedSelectedDate ?? 'Current plan'}</span>
+                  <select
+                    className="bg-transparent text-sm font-medium text-white/90 focus:outline-none"
+                    onChange={handlePlanDateChange}
+                    value={isCustomDate ? '__custom' : planDate ?? ''}
+                    disabled={isLoadingOptions}
+                  >
+                    <option value="">Latest snapshot</option>
+                    {options.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                    <option value="__custom">Custom…</option>
+                  </select>
+                </span>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/60">Plan window</p>
-                <p className="text-base font-semibold text-white">{windowLabel}</p>
-                <p className="text-xs text-white/65">
-                  {formattedSelectedDate ? `Selected ${formattedSelectedDate}` : 'Latest available plan'} · {datasetRange}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
-                <Clock className="h-3.5 w-3.5 text-sky-200" />
-                Last sync {lastRefresh}
-              </Badge>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="h-10 min-w-[200px] rounded-2xl border border-white/30 bg-white/85 px-3 text-sm font-semibold text-slate-900 shadow-sm transition focus:border-sky-400/70 focus:outline-none"
-                onChange={handlePlanDateChange}
-                value={isCustomDate ? '__custom' : planDate ?? ''}
-                disabled={isLoadingOptions}
+              {isCustomDate && (
+                <input
+                  type="date"
+                  className="h-10 rounded-2xl border border-white/20 bg-white/12 px-3 text-sm font-medium text-white/90 backdrop-blur-xl transition focus:border-sky-400/70 focus:outline-none"
+                  value={planDate ?? ''}
+                  onChange={handlePlanDateInput}
+                  min={minPlanDate}
+                  max={maxPlanDate}
+                />
+              )}
+              <button
+                type="button"
+                onClick={clearPlanDate}
+                className="inline-flex h-10 items-center rounded-2xl border border-white/15 bg-white/10 px-3 text-sm font-medium text-white/80 transition hover:bg-white/20"
               >
-                <option value="">Latest plan</option>
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-                {planDate && isCustomDate && (
-                  <option value="__custom">Custom date</option>
-                )}
-              </select>
-              <input
-                type="date"
-                className="h-10 rounded-2xl border border-white/30 bg-white/85 px-3 text-sm font-semibold text-slate-900 shadow-sm transition focus:border-sky-400/70 focus:outline-none"
-                value={planDate ?? ''}
-                onChange={handlePlanDateInput}
-                min={minPlanDate}
-                max={maxPlanDate}
-              />
+                Current
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={clearPlanDate}
-              className="inline-flex h-10 items-center rounded-2xl border border-white/15 bg-white/10 px-3 text-sm font-medium text-white/80 transition hover:bg-white/20"
-            >
-              Use latest
-            </button>
           </div>
         </header>
 

@@ -8,7 +8,8 @@ import {
   ClipboardList,
   Clock,
   MapPin,
-  TrainFront
+  TrainFront,
+  Sparkles,
 } from 'lucide-react'
 import { usePlanDate } from '../context/PlanDateContext'
 
@@ -52,6 +53,8 @@ interface GanttJob {
   jobType?: string
   assignedCrew?: string
   priority?: string
+  isCleaning: boolean
+  cleanFlag: 0 | 1
 }
 
 interface DepotReferenceResponse {
@@ -306,6 +309,10 @@ export default function IBLGantt() {
 
         const startIndex = Math.max(startOffset / SLOT_MINUTES, 0)
         const endIndex = Math.max(endOffset / SLOT_MINUTES, startIndex)
+        const jobTypeRaw = slot.job_type ?? 'maintenance'
+        const priorityRaw = slot.priority ?? 'medium'
+        const isCleaning = jobTypeRaw.toLowerCase().includes('clean')
+        const cleanFlag: 0 | 1 = isCleaning && priorityRaw.toLowerCase() === 'high' ? 1 : 0
 
         return {
           bay_id: slot.bay_id,
@@ -318,6 +325,8 @@ export default function IBLGantt() {
           jobType: slot.job_type,
           assignedCrew: slot.assigned_crew,
           priority: slot.priority,
+          isCleaning,
+          cleanFlag,
         }
       })
       .sort((a, b) => a.start.getTime() - b.start.getTime())
@@ -362,6 +371,15 @@ export default function IBLGantt() {
       }, []),
     [jobs],
   )
+
+  const cleaningMetrics = useMemo(() => {
+    const cleaningJobs = jobs.filter((job) => job.isCleaning)
+    const flagged = cleaningJobs.filter((job) => job.cleanFlag === 1).length
+    return {
+      totalCleaningJobs: cleaningJobs.length,
+      flaggedCleaningJobs: flagged,
+    }
+  }, [jobs])
 
   if (queryError) {
     let message = 'Failed to load IBL schedule'
@@ -426,7 +444,7 @@ export default function IBLGantt() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <SummaryCard
             label="Night jobs"
             value={jobs.length}
@@ -450,6 +468,12 @@ export default function IBLGantt() {
             value={uniqueBays}
             icon={MapPin}
             accent="text-amber-200"
+          />
+          <SummaryCard
+            label="Cleaning slots"
+            value={`${cleaningMetrics.flaggedCleaningJobs}/${cleaningMetrics.totalCleaningJobs}`}
+            icon={Sparkles}
+            accent="text-cyan-200"
           />
         </div>
 
@@ -523,7 +547,7 @@ export default function IBLGantt() {
                                 </span>
                               )}
                             </div>
-                            <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-white/60">
+                            <dl className="mt-3 grid grid-cols-4 gap-2 text-[11px] text-white/60">
                               <div>
                                 <dt className="text-[10px] uppercase tracking-wide text-white/40">Start</dt>
                                 <dd className="font-medium text-white/70">{formatTime(job.start)}</dd>
@@ -535,6 +559,12 @@ export default function IBLGantt() {
                               <div>
                                 <dt className="text-[10px] uppercase tracking-wide text-white/40">Duration</dt>
                                 <dd className="font-medium text-white/70">{job.durationHours.toFixed(1)} h</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase tracking-wide text-white/40">Clean flag</dt>
+                                <dd className={`font-medium ${job.cleanFlag === 1 ? 'text-emerald-200' : 'text-white/70'}`}>
+                                  {job.cleanFlag}
+                                </dd>
                               </div>
                             </dl>
                           </div>

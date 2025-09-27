@@ -93,6 +93,8 @@ interface PlanItem {
   wrap_id?: string | null
   brand_code?: string | null
   fitness_ok: boolean | null
+  fit_status_code?: number | null
+  fit_expiry_buffer_hours?: number | null
   wo_blocking: boolean | null
   brand_deficit: number
   mileage_deviation: number
@@ -101,7 +103,7 @@ interface PlanItem {
 }
 
 const fetchDashboardSummary = async (planDate: string | null): Promise<DashboardSummaryResponse> => {
-  const params: Record<string, string | boolean> = {}
+  const params: Record<string, string | boolean> = { include_details: true }
   if (planDate) {
     params.plan_date = planDate
   }
@@ -131,12 +133,33 @@ export default function Dashboard() {
     queryFn: () => fetchDashboardSummary(planDate),
   })
 
-  const latestCounts = data?.latest_plan?.counts ?? { active: 0, standby: 0, ibl: 0 }
-  const planSummary = data?.plan_details?.summary ?? { active: 0, standby: 0, ibl: 0, total: 0 }
+  const latestActive = data?.latest_plan?.counts?.active ?? 0
+  const latestStandby = data?.latest_plan?.counts?.standby ?? 0
+  const latestIbl = data?.latest_plan?.counts?.ibl ?? 0
+
+  const latestCounts = {
+    active: latestActive,
+    standby: latestStandby,
+    ibl: latestIbl,
+  }
+
+  const planSummary = data?.plan_details?.summary ?? {
+    active: latestActive,
+    standby: latestStandby,
+    ibl: latestIbl,
+    total: latestActive + latestStandby + latestIbl,
+  }
   const maintenance = data?.maintenance
   const branding = data?.branding
   const alerts = data?.alerts ?? []
   const recentPlans = data?.recent_plans ?? []
+
+  const formatMetric = (value: number | null | undefined, options?: Intl.NumberFormatOptions): string => {
+    if (value === null || value === undefined) {
+      return '—'
+    }
+    return new Intl.NumberFormat(undefined, options).format(value)
+  }
 
   const focusAreas = useMemo(() => {
     if (!data || !maintenance || !branding) {
@@ -149,20 +172,31 @@ export default function Dashboard() {
       ]
     }
 
+    const hasBrandingData = (branding.total_exposure_hours ?? 0) > 0 || (branding.active_campaigns ?? 0) > 0
+    const hasMaintenanceData = (maintenance.total_open_jobs ?? 0) > 0 || (maintenance.critical_jobs ?? 0) > 0
+    const availability = data.fleet?.availability
+    const hasAvailabilityData = Boolean(availability && availability.total_trains)
+
     return [
       {
         title: 'Branding recovery',
-        description: `${branding.active_campaigns} active campaigns · ${branding.total_exposure_hours.toFixed(1)}h exposure over last ${branding.period_days} days`,
+        description: hasBrandingData
+          ? `${formatMetric(branding.active_campaigns)} active campaigns · ${formatMetric(branding.total_exposure_hours, { maximumFractionDigits: 1 })}h exposure over last ${formatMetric(branding.period_days)} days`
+          : 'Brand exposure data not available for the selected window.',
         icon: Target,
       },
       {
         title: 'Maintenance pressure',
-        description: `${maintenance.critical_jobs} critical jobs · ${maintenance.total_open_jobs} total open`,
+        description: hasMaintenanceData
+          ? `${formatMetric(maintenance.critical_jobs)} critical jobs · ${formatMetric(maintenance.total_open_jobs)} total open`
+          : 'No maintenance backlog recorded for this plan.',
         icon: ClipboardList,
       },
       {
         title: 'Fleet availability',
-        description: `${data.fleet.availability.available_trains} ready trains · ${data.fleet.availability.availability_rate}% availability`,
+        description: hasAvailabilityData
+          ? `${formatMetric(availability?.available_trains)} ready trains · ${formatMetric(availability?.availability_rate, { maximumFractionDigits: 1 })}% availability`
+          : 'Availability rollup pending—run the optimiser to refresh.',
         icon: TrendingUp,
       },
     ]
@@ -351,7 +385,9 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <span>Fleet availability</span>
                   <Badge variant="success">
-                    {data?.fleet?.availability?.availability_rate?.toFixed(1) ?? '0'}%
+                    {data?.fleet?.availability?.availability_rate != null
+                      ? `${data.fleet.availability.availability_rate.toFixed(1)}%`
+                      : '—'}
                   </Badge>
                 </div>
                 <p className="mt-2 text-xs text-white/60">
